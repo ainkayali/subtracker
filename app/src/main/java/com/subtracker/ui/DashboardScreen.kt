@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,7 +20,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -30,6 +30,7 @@ import com.subtracker.ExchangeRates
 import com.subtracker.Subscription
 import com.subtracker.formatMoney
 import com.subtracker.monthlyAmount
+import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -52,49 +53,61 @@ fun DashboardScreen(
     val totalSpent = sorted.sumOf {
         monthlyAmount(it) * (exchangeRates.ratesToTry[it.currency.uppercase()] ?: 1.0)
     }
-
-    val todaySubs = sorted.filter { isSameDay(it.nextBilling, now) }
-    val upcomingSubs = sorted.filter { !isSameDay(it.nextBilling, now) && isWithinDays(it.nextBilling, now, 7) }
-    val otherSubs = sorted.filter { !isSameDay(it.nextBilling, now) && !isWithinDays(it.nextBilling, now, 7) }
+    
+    val monthName = SimpleDateFormat("MMMM", Locale("tr", "TR")).format(Date()).uppercase(Locale("tr", "TR"))
+    val dateTitle = SimpleDateFormat("d MMMM yyyy", Locale("tr", "TR")).format(Date())
+    val timeTitle = SimpleDateFormat("HH:mm", Locale("tr", "TR")).format(Date())
 
     LazyColumn(
         modifier
             .fillMaxSize()
             .background(Color(0xFFF4F3EF))
             .padding(contentPadding)
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
+        contentPadding = PaddingValues(top = 12.dp, bottom = 100.dp)
     ) {
+        // 1. Header (Date & Time)
         item {
-            BudgetHeader(
-                spent = totalSpent,
-                limit = budgetLimit,
-                onLimitChange = onBudgetChange
-            )
+            HeaderSection(dateTitle, timeTitle, onRefreshRates)
         }
 
-        if (todaySubs.isNotEmpty()) {
-            item { SectionHeader("BUGÜN") }
-            items(todaySubs) { sub ->
-                SubscriptionCard(sub, "Bugün kesilecek", true) { onEdit(sub) }
+        // 2. Total Summary Card (2nd Screenshot style)
+        item {
+            TotalSummaryCard(monthName, totalSpent, exchangeRates)
+        }
+
+        // 3. Budget Card (1st Screenshot style)
+        item {
+            BudgetCard(totalSpent, budgetLimit, onBudgetChange)
+        }
+
+        // 4. Subscriptions Header
+        item {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "ABONELİKLER",
+                    color = Color(0xFF9A968F),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 2.sp
+                )
+                Text(
+                    "${subscriptions.size} / ${subscriptions.size}",
+                    color = Color(0xFF9A968F),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
-        if (upcomingSubs.isNotEmpty()) {
-            item { SectionHeader("YAKLAŞAN") }
-            items(upcomingSubs) { sub ->
-                val days = daysUntil(sub.nextBilling, now)
-                SubscriptionCard(sub, "$days gün sonra", false, showProgress = true) { onEdit(sub) }
-            }
-        }
-
-        if (otherSubs.isNotEmpty()) {
-            item { SectionHeader("DİĞER") }
-            items(otherSubs) { sub ->
-                val dateStr = formatDateMinimal(sub.nextBilling)
-                SubscriptionCard(sub, dateStr, false) { onEdit(sub) }
-            }
+        // 5. Subscription Cards (1st Screenshot style)
+        items(sorted) { sub ->
+            EnhancedSubscriptionCard(sub, now) { onEdit(sub) }
         }
         
         if (subscriptions.isEmpty()) {
@@ -104,256 +117,232 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun BudgetHeader(spent: Double, limit: Double, onLimitChange: (Double) -> Unit) {
-    val isOverBudget = spent > limit
-    val progress = (spent / limit).coerceIn(0.0, 1.0)
-    val color = if (isOverBudget) Color(0xFFD32F2F) else Color(0xFF111111)
-    
-    var isEditing by remember { mutableStateOf(false) }
-    var editValue by remember { mutableStateOf(limit.toInt().toString()) }
-
-    Column(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Bu ay: ₺${spent.toInt()} / ",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = color
-            )
-            if (isEditing) {
-                BasicTextField(
-                    value = editValue,
-                    onValueChange = { editValue = it.filter { c -> c.isDigit() } },
-                    textStyle = TextStyle(
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = color,
-                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                    ),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    cursorBrush = SolidColor(color),
-                    modifier = Modifier.width(IntrinsicSize.Min),
-                    singleLine = true,
-                    onTextLayout = {},
-                    decorationBox = { innerTextField ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            innerTextField()
-                            Text(" ₺", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = color)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "✓",
-                                Modifier.clickable { 
-                                    onLimitChange(editValue.toDoubleOrNull() ?: limit)
-                                    isEditing = false 
-                                },
-                                color = Color(0xFF4CAF50),
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                    }
-                )
-            } else {
-                Text(
-                    text = "₺${limit.toInt()}",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = color,
-                    modifier = Modifier.clickable { isEditing = true }
-                )
-            }
+private fun HeaderSection(date: String, time: String, onRefresh: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = {}) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color(0xFF111111), modifier = Modifier.size(28.dp))
         }
-        
-        Spacer(Modifier.height(8.dp))
-        
-        // Progress Bar
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(12.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(color.copy(alpha = 0.1f))
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth(progress.toFloat())
-                    .fillMaxHeight()
-                    .background(color)
-            )
+        Column(Modifier.weight(1f)) {
+            Text(date, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF111111))
+            Text(time, fontSize = 16.sp, color = Color(0xFF77736C), fontWeight = FontWeight.Medium)
         }
-        
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "%${(progress * 100).toInt()} tamamlandı ${asciiBar(progress)}",
-            fontSize = 12.sp,
-            color = if (isOverBudget) color else Color(0xFF666666),
-            textAlign = TextAlign.End,
-            modifier = Modifier.fillMaxWidth(),
-            fontFamily = FontFamily.Monospace
-        )
+        IconButton(onClick = onRefresh) {
+            Icon(Icons.Default.Info, null, tint = Color(0xFF111111), modifier = Modifier.size(28.dp))
+        }
     }
 }
 
 @Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = "--- $title ---",
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Black,
-        color = Color(0xFF999999),
-        letterSpacing = 1.sp,
-        modifier = Modifier.padding(top = 8.dp)
-    )
+private fun TotalSummaryCard(month: String, total: Double, exchangeRates: ExchangeRates) {
+    val usdRate = exchangeRates.ratesToTry["USD"] ?: 44.88 // Default from screenshot if not loaded
+    
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFEFA)),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Column(Modifier.padding(24.dp)) {
+            Text(
+                "$month · AYI TOPLAMI",
+                color = Color(0xFF77736C),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 2.sp
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    formatMoney(total, "TRY"),
+                    fontSize = 44.sp,
+                    fontWeight = FontWeight.Light,
+                    modifier = Modifier.weight(1f),
+                    color = Color(0xFF111111)
+                )
+                Surface(
+                    color = Color(0xFFF0EFEB),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        "TRY  ↔",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        color = Color(0xFF77736C)
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "1 USD = ${"%.2f".format(usdRate)} ₺",
+                fontSize = 13.sp,
+                color = Color(0xFF77736C),
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
 }
 
 @Composable
-private fun SubscriptionCard(
-    sub: Subscription, 
-    status: String, 
-    isAlert: Boolean, 
-    showProgress: Boolean = false,
-    onClick: () -> Unit
-) {
-    val statusColor = if (isAlert) Color(0xFFD32F2F) else Color(0xFF666666)
+private fun BudgetCard(spent: Double, limit: Double, onLimitChange: (Double) -> Unit) {
+    val progress = (spent / limit).coerceIn(0.0, 1.0).toFloat()
+    val isOverBudget = spent > limit
+    val accentColor = if (isOverBudget) Color(0xFFD32F2F) else Color(0xFFE57373)
     
+    var isEditing by remember { mutableStateOf(false) }
+    var editValue by remember { mutableStateOf(limit.toInt().toString()) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Bu ay harcama", fontSize = 15.sp, color = Color(0xFF77736C), fontWeight = FontWeight.Medium)
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("₺${spent.toInt()} / ", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    if (isEditing) {
+                        BasicTextField(
+                            value = editValue,
+                            onValueChange = { editValue = it.filter { c -> c.isDigit() } },
+                            textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.width(60.dp),
+                            singleLine = true,
+                            decorationBox = { inner ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    inner()
+                                    Text(" ₺", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                    Text("✓", Modifier.clickable { onLimitChange(editValue.toDoubleOrNull() ?: limit); isEditing = false }.padding(start = 4.dp), color = Color(0xFF4CAF50))
+                                }
+                            }
+                        )
+                    } else {
+                        Text("₺${limit.toInt()}", fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { isEditing = true })
+                    }
+                }
+            }
+            
+            Spacer(Modifier.height(12.dp))
+            
+            // Progress Bar
+            Box(
+                Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(Color(0xFFF0F0F0))
+            ) {
+                Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(accentColor))
+            }
+            
+            Spacer(Modifier.height(16.dp))
+            
+            // Legend
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LegendItem("Yayın", Color(0xFFE57373))
+                LegendItem("Yazılım", Color(0xFF4CAF50))
+                LegendItem("Diğer", Color(0xFFBDBDBD))
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendItem(label: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 12.sp, color = Color(0xFF9A968F), fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun EnhancedSubscriptionCard(sub: Subscription, now: LocalDate, onClick: () -> Unit) {
+    val style = brandStyle(sub.name, sub.category)
+    val daysUntil = daysUntil(sub.nextBilling, now)
+    val statusText = when {
+        daysUntil == 0L -> "Bugün ödeniyor"
+        daysUntil == 1L -> "Yarın ödeniyor"
+        daysUntil < 7 -> "$daysUntil gün sonra"
+        else -> formatDateMinimal(sub.nextBilling)
+    }
+    val statusColor = if (daysUntil <= 0L) Color(0xFFD32F2F) else if (daysUntil < 7) Color(0xFFFFA000) else Color(0xFF9A968F)
+
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BrandBadge(sub)
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    sub.name,
-                    color = Color(0xFF161616),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isAlert) {
-                        Text("⚠️ ", fontSize = 13.sp)
-                    } else if (showProgress) {
-                        Text("⏳ ", fontSize = 13.sp)
-                    } else {
-                        Text("📅 ", fontSize = 13.sp)
-                    }
-                    Text(
-                        text = status,
-                        fontSize = 13.sp,
-                        color = statusColor
-                    )
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+            // Left color strip
+            Box(Modifier.width(4.dp).fillMaxHeight().background(style.background))
+            
+            Row(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Brand Badge
+                Box(
+                    modifier = Modifier.size(54.dp).clip(RoundedCornerShape(14.dp)).background(style.background),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(style.label, color = style.content, fontSize = style.fontSize, fontWeight = FontWeight.Black)
                 }
-                if (showProgress) {
-                    val daysLeft = daysUntil(sub.nextBilling, LocalDate.now())
-                    val cycleDays = when(sub.cycle) {
-                        "weekly" -> 7
-                        "yearly" -> 365
-                        else -> 30
+                
+                Spacer(Modifier.width(16.dp))
+                
+                Column(Modifier.weight(1f)) {
+                    Text(sub.name, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF111111))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(statusColor))
+                        Spacer(Modifier.width(6.dp))
+                        Text(statusText, fontSize = 14.sp, color = statusColor, fontWeight = FontWeight.Medium)
                     }
-                    val progress = 1f - (daysLeft.toFloat() / cycleDays).coerceIn(0f, 1f)
-                    Text(
-                        text = asciiBar(progress.toDouble()),
-                        fontSize = 12.sp,
-                        color = Color(0xFFBBBBBB),
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+                }
+                
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(formatMoney(sub.amount, sub.currency), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF111111))
+                    Text("aylık", fontSize = 12.sp, color = Color(0xFF9A968F), fontWeight = FontWeight.Medium)
                 }
             }
-            Spacer(Modifier.width(12.dp))
-            Text(
-                formatMoney(sub.amount, sub.currency),
-                color = Color(0xFF161616),
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1
-            )
         }
     }
 }
 
 @Composable
-private fun BrandBadge(sub: Subscription) {
-    val style = brandStyle(sub.name, sub.category)
-    Box(
-        modifier = Modifier
-            .size(54.dp)
-            .clip(if (style.round) CircleShape else RoundedCornerShape(12.dp))
-            .background(style.background),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            style.label,
-            color = style.content,
-            fontSize = style.fontSize,
-            fontWeight = FontWeight.Black
-        )
-    }
-}
-
-private data class BrandStyle(
-    val label: String,
-    val background: Color,
-    val content: Color = Color.White,
-    val round: Boolean = true,
-    val fontSize: androidx.compose.ui.unit.TextUnit = 24.sp
-)
-
-private fun brandStyle(name: String, category: String): BrandStyle {
-    val normalized = name.lowercase(Locale.US)
-    return when {
-        "netflix" in normalized -> BrandStyle("N", Color(0xFFFBF3F1), Color(0xFFE50914), false, 38.sp)
-        "spotify" in normalized -> BrandStyle("S", Color(0xFF57D861), Color.White, true, 28.sp)
-        "youtube" in normalized -> BrandStyle("▶", Color(0xFFE91E3A), Color.White, true, 24.sp)
-        "apple" in normalized -> BrandStyle("♪", Color(0xFFE94D6A), Color.White, false, 32.sp)
-        "chatgpt" in normalized || "openai" in normalized -> BrandStyle("◎", Color.White, Color.Black, true, 30.sp)
-        "claude" in normalized -> BrandStyle("✳", Color(0xFFF7EFEA), Color(0xFFC26B50), true, 32.sp)
-        category == "Oyun" -> BrandStyle("G", Color(0xFF6047D7), Color.White)
-        category == "Yazılım" -> BrandStyle("A", Color(0xFF1F2937), Color.White)
-        category == "Fatura" -> BrandStyle("₺", Color(0xFF445849), Color.White)
-        else -> BrandStyle(name.take(1).uppercase(Locale("tr", "TR")).ifBlank { "?" }, Color(0xFFECE8DF), Color(0xFF1F1F1F))
-    }
-}
-
-@Composable
 private fun EmptyState() {
-    Column(
-        Modifier.fillMaxWidth().padding(vertical = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("--- BOŞ ---", color = Color(0xFFCCCCCC))
         Spacer(Modifier.height(8.dp))
         Text("Abonelik eklemek için + tuşuna bas.", color = Color(0xFF999999), textAlign = TextAlign.Center)
     }
 }
 
-private fun asciiBar(progress: Double): String {
-    val totalChars = 8
-    val filledChars = (progress * totalChars).toInt().coerceIn(0, totalChars)
-    val emptyChars = totalChars - filledChars
-    return "▓".repeat(filledChars) + "░".repeat(emptyChars)
-}
+private data class BrandStyle(
+    val label: String, val background: Color, val content: Color = Color.White,
+    val round: Boolean = true, val fontSize: androidx.compose.ui.unit.TextUnit = 24.sp
+)
 
-private fun isSameDay(millis: Long, now: LocalDate): Boolean {
-    val date = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
-    return date.isEqual(now)
-}
-
-private fun isWithinDays(millis: Long, now: LocalDate, days: Int): Boolean {
-    val date = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
-    val diff = ChronoUnit.DAYS.between(now, date)
-    return diff in 1..days.toLong()
+private fun brandStyle(name: String, category: String): BrandStyle {
+    val normalized = name.lowercase(Locale.US)
+    return when {
+        "netflix" in normalized -> BrandStyle("N", Color(0xFF111111), Color(0xFFE50914), false, 36.sp)
+        "youtube" in normalized -> BrandStyle("▶", Color(0xFFE91E3A), Color.White, false, 24.sp)
+        "claude" in normalized -> BrandStyle("Cl", Color(0xFFC26B50), Color.White, false, 28.sp)
+        "spotify" in normalized -> BrandStyle("♪", Color(0xFF1DB954), Color.White, false, 30.sp)
+        category == "Oyun" -> BrandStyle("G", Color(0xFF6047D7), Color.White, false)
+        category == "Yazılım" -> BrandStyle("S", Color(0xFF1F2937), Color.White, false)
+        else -> BrandStyle(name.take(1).uppercase(Locale("tr", "TR")), Color(0xFFECE8DF), Color(0xFF111111), false)
+    }
 }
 
 private fun daysUntil(millis: Long, now: LocalDate): Long {
@@ -364,5 +353,5 @@ private fun daysUntil(millis: Long, now: LocalDate): Long {
 private fun formatDateMinimal(millis: Long): String {
     val date = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
     val monthNames = listOf("Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara")
-    return "${date.dayOfMonth} ${monthNames[date.monthValue - 1]}"
+    return "${date.dayOfMonth} ${monthNames[date.monthValue - 1]} ${date.year}"
 }
