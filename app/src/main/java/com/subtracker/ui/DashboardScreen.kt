@@ -209,26 +209,35 @@ private fun BudgetCard(spent: Double, limit: Double, onLimitChange: (Double) -> 
             ) {
                 Text("Bu ay harcama", fontSize = 15.sp, color = Color(0xFF77736C), fontWeight = FontWeight.Medium)
                 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { isEditing = true }
+                ) {
                     Text("₺${spent.toInt()} / ", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     if (isEditing) {
                         BasicTextField(
                             value = editValue,
                             onValueChange = { editValue = it.filter { c -> c.isDigit() } },
-                            textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End),
+                            textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, color = accentColor),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.width(60.dp),
+                            modifier = Modifier.width(IntrinsicSize.Min),
                             singleLine = true,
                             decorationBox = { inner ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     inner()
-                                    Text(" ₺", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                    Text("✓", Modifier.clickable { onLimitChange(editValue.toDoubleOrNull() ?: limit); isEditing = false }.padding(start = 4.dp), color = Color(0xFF4CAF50))
+                                    Text(" ₺", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = accentColor)
+                                    Text(" ✓", Modifier.clickable { onLimitChange(editValue.toDoubleOrNull() ?: limit); isEditing = false }.padding(start = 4.dp), color = Color(0xFF4CAF50), fontWeight = FontWeight.Black)
                                 }
                             }
                         )
                     } else {
-                        Text("₺${limit.toInt()}", fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { isEditing = true })
+                        Text(
+                            text = "₺${limit.toInt()}",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = accentColor,
+                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                        )
                     }
                 }
             }
