@@ -64,14 +64,13 @@ fun DashboardScreen(
             .padding(contentPadding)
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(top = 24.dp, bottom = 100.dp)
+        contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp)
     ) {
         item {
             BudgetHeader(
                 spent = totalSpent,
                 limit = budgetLimit,
-                onLimitChange = onBudgetChange,
-                onRefresh = onRefreshRates
+                onLimitChange = onBudgetChange
             )
         }
 
@@ -314,10 +313,6 @@ private fun daysUntil(millis: Long, now: LocalDate): Long {
 
 private fun formatDateMinimal(millis: Long): String {
     val date = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
-    val monthNames = listOf("Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara")
-    return "${date.dayOfMonth} ${monthNames[date.monthValue - 1]}"
-}
-()).toLocalDate()
     val monthNames = listOf("Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara")
     return "${date.dayOfMonth} ${monthNames[date.monthValue - 1]}"
 }
