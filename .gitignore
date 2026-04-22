@@ -5,3 +5,5 @@
 /build
 /app/build
 sdk.dir=
+release.keystore
+*.keystore
