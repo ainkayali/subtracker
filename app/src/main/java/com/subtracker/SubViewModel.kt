@@ -12,11 +12,14 @@ import kotlinx.coroutines.launch
 class SubViewModel(app: Application) : AndroidViewModel(app) {
     private val dao = (app as App).db.dao()
     private val rateRepository = ExchangeRateRepository(app)
+    private val settingsRepository = SettingsRepository(app)
 
     val subscriptions = dao.getAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     private val _exchangeRates = MutableStateFlow(ExchangeRates())
     val exchangeRates: StateFlow<ExchangeRates> = _exchangeRates
+    
+    val budgetLimit = settingsRepository.budgetLimit
 
     init {
         viewModelScope.launch {
@@ -28,6 +31,10 @@ class SubViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         refreshRates()
+    }
+
+    fun setBudgetLimit(limit: Double) {
+        settingsRepository.setBudgetLimit(limit)
     }
 
     fun save(sub: Subscription) = viewModelScope.launch {

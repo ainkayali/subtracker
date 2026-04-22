@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
                 val vm: SubViewModel = viewModel()
                 val subs by vm.subscriptions.collectAsState(emptyList())
                 val exchangeRates by vm.exchangeRates.collectAsState()
+                val budgetLimit by vm.budgetLimit.collectAsState()
                 var editingId by remember { mutableStateOf<Long?>(null) }
 
                 if (editingId != null) {
@@ -47,6 +48,8 @@ class MainActivity : ComponentActivity() {
                         DashboardScreen(
                             subscriptions = subs,
                             exchangeRates = exchangeRates,
+                            budgetLimit = budgetLimit,
+                            onBudgetChange = vm::setBudgetLimit,
                             onRefreshRates = vm::refreshRates,
                             onEdit = { editingId = it.id },
                             contentPadding = pad
