@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.subtracker.ExchangeRates
 import com.subtracker.Subscription
 import com.subtracker.formatMoney
 import com.subtracker.monthlyAmount
@@ -44,22 +45,19 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val TryRate = mapOf(
-    "TRY" to 1.0,
-    "USD" to 44.8,
-    "EUR" to 48.5,
-    "GBP" to 56.0
-)
-
 @Composable
 fun DashboardScreen(
     subscriptions: List<Subscription>,
+    exchangeRates: ExchangeRates,
+    onRefreshRates: () -> Unit,
     onEdit: (Subscription) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier
 ) {
     val sorted = subscriptions.sortedBy { it.nextBilling }
-    val totalTry = sorted.sumOf { monthlyAmount(it) * (TryRate[it.currency.uppercase()] ?: 1.0) }
+    val totalTry = sorted.sumOf {
+        monthlyAmount(it) * (exchangeRates.ratesToTry[it.currency.uppercase()] ?: 1.0)
+    }
     val monthTitle = SimpleDateFormat("MMMM", Locale("tr", "TR"))
         .format(Date())
         .uppercase(Locale("tr", "TR"))
@@ -76,14 +74,15 @@ fun DashboardScreen(
         contentPadding = PaddingValues(top = 12.dp, bottom = 96.dp)
     ) {
         item {
-            Header(dateTitle = dateTitle, timeTitle = timeTitle)
+            Header(dateTitle = dateTitle, timeTitle = timeTitle, onRefreshRates = onRefreshRates)
         }
 
         item {
             SummaryCard(
                 monthTitle = monthTitle,
                 totalTry = totalTry,
-                count = sorted.size
+                count = sorted.size,
+                exchangeRates = exchangeRates
             )
         }
 
@@ -125,7 +124,7 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun Header(dateTitle: String, timeTitle: String) {
+private fun Header(dateTitle: String, timeTitle: String, onRefreshRates: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -150,14 +149,24 @@ private fun Header(dateTitle: String, timeTitle: String) {
                 fontWeight = FontWeight.Medium
             )
         }
-        IconButton(onClick = {}) {
-            Icon(Icons.Default.Info, "Bilgi", tint = Color(0xFF1F1F1F), modifier = Modifier.size(30.dp))
+        IconButton(onClick = onRefreshRates) {
+            Icon(Icons.Default.Info, "Kurları yenile", tint = Color(0xFF1F1F1F), modifier = Modifier.size(30.dp))
         }
     }
 }
 
 @Composable
-private fun SummaryCard(monthTitle: String, totalTry: Double, count: Int) {
+private fun SummaryCard(monthTitle: String, totalTry: Double, count: Int, exchangeRates: ExchangeRates) {
+    val usdRate = exchangeRates.ratesToTry["USD"]
+    val rateText = if (usdRate != null) {
+        "1 USD = ${"%.4f".format(Locale.US, usdRate)} ₺"
+    } else {
+        "TCMB kuru bekleniyor"
+    }
+    val sourceText = listOf(exchangeRates.source, exchangeRates.sourceDate)
+        .filter { it.isNotBlank() }
+        .joinToString(" · ")
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
@@ -197,12 +206,22 @@ private fun SummaryCard(monthTitle: String, totalTry: Double, count: Int) {
             }
             Spacer(Modifier.height(18.dp))
             Text(
-                "1 USD = 44.8 ₺",
+                rateText,
                 color = Color(0xFF77736C),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 2.sp
             )
+            if (sourceText.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    sourceText,
+                    color = Color(0xFF9A968F),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+            }
             Spacer(Modifier.height(26.dp))
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
                 Text(

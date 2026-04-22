@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
             SubTrackerTheme {
                 val vm: SubViewModel = viewModel()
                 val subs by vm.subscriptions.collectAsState(emptyList())
+                val exchangeRates by vm.exchangeRates.collectAsState()
                 var editingId by remember { mutableStateOf<Long?>(null) }
 
                 if (editingId != null) {
@@ -45,6 +46,8 @@ class MainActivity : ComponentActivity() {
                     ) { pad ->
                         DashboardScreen(
                             subscriptions = subs,
+                            exchangeRates = exchangeRates,
+                            onRefreshRates = vm::refreshRates,
                             onEdit = { editingId = it.id },
                             contentPadding = pad
                         )
