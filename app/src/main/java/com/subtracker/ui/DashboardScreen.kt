@@ -105,7 +105,7 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun BudgetHeader(spent: Double, limit: Double, onLimitChange: (Double) -> Unit, onRefresh: () -> Unit) {
+private fun BudgetHeader(spent: Double, limit: Double, onLimitChange: (Double) -> Unit) {
     val isOverBudget = spent > limit
     val progress = (spent / limit).coerceIn(0.0, 1.0)
     val color = if (isOverBudget) Color(0xFFD32F2F) else Color(0xFF111111)
@@ -161,14 +161,10 @@ private fun BudgetHeader(spent: Double, limit: Double, onLimitChange: (Double) -
                     color = color,
                     modifier = Modifier.clickable { isEditing = true }
                 )
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = onRefresh, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Default.Info, null, tint = Color(0xFF999999))
-                }
             }
         }
         
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         
         // Progress Bar
         Box(
@@ -318,6 +314,10 @@ private fun daysUntil(millis: Long, now: LocalDate): Long {
 
 private fun formatDateMinimal(millis: Long): String {
     val date = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
+    val monthNames = listOf("Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara")
+    return "${date.dayOfMonth} ${monthNames[date.monthValue - 1]}"
+}
+()).toLocalDate()
     val monthNames = listOf("Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara")
     return "${date.dayOfMonth} ${monthNames[date.monthValue - 1]}"
 }
