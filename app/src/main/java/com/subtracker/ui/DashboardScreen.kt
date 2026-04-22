@@ -145,6 +145,8 @@ private fun HeaderSection(date: String, time: String, onSettingsClick: () -> Uni
 @Composable
 private fun TotalSummaryCard(month: String, total: Double, exchangeRates: ExchangeRates) {
     val usdRate = exchangeRates.ratesToTry["USD"] ?: 44.88 // Default from screenshot if not loaded
+    var displayCurrency by remember { mutableStateOf("TRY") }
+    val displayTotal = if (displayCurrency == "USD") total / usdRate else total
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -163,7 +165,7 @@ private fun TotalSummaryCard(month: String, total: Double, exchangeRates: Exchan
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    formatMoney(total, "TRY"),
+                    formatMoney(displayTotal, displayCurrency),
                     fontSize = 44.sp,
                     fontWeight = FontWeight.Light,
                     modifier = Modifier.weight(1f),
@@ -171,10 +173,13 @@ private fun TotalSummaryCard(month: String, total: Double, exchangeRates: Exchan
                 )
                 Surface(
                     color = Color(0xFFF0EFEB),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.clickable {
+                        displayCurrency = if (displayCurrency == "TRY") "USD" else "TRY"
+                    }
                 ) {
                     Text(
-                        "TRY  ↔",
+                        "$displayCurrency  ↔",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
