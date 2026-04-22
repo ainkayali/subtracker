@@ -30,13 +30,13 @@ fun relativeLabel(millis: Long): String {
         Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
     )
     return when {
-        days < 0 -> "Overdue"
-        days == 0L -> "Today"
-        days == 1L -> "Tomorrow"
-        days < 7 -> "In ${days}d"
-        days < 30 -> "In ${days / 7}w"
-        days < 365 -> "In ${days / 30}mo"
-        else -> "In ${days / 365}y"
+        days < 0 -> "Gecikmiş"
+        days == 0L -> "Bugün"
+        days == 1L -> "Yarın"
+        days < 7 -> "${days} gün sonra"
+        days < 30 -> "${days / 7} hafta sonra"
+        days < 365 -> "${days / 30} ay sonra"
+        else -> "${days / 365} yıl sonra"
     }
 }
 

@@ -36,7 +36,7 @@ fun DashboardScreen(
     val upcoming = subscriptions.filter { it.nextBilling in now..(now + 30L * 86_400_000) }
     val totals = subscriptions.groupBy { it.currency }
         .mapValues { (_, list) -> list.sumOf { monthlyAmount(it) } }
-    val currency = totals.keys.firstOrNull() ?: "USD"
+    val currency = totals.keys.firstOrNull() ?: "TRY"
 
     LazyColumn(
         modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -50,7 +50,7 @@ fun DashboardScreen(
             ) {
                 Column(Modifier.padding(24.dp)) {
                     Text(
-                        "Monthly total",
+                        "Aylık toplam",
                         color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
@@ -66,13 +66,13 @@ fun DashboardScreen(
                     Spacer(Modifier.height(10.dp))
                     Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
                         Text(
-                            "${subscriptions.size} active",
+                            "${subscriptions.size} aktif",
                             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         if (upcoming.isNotEmpty()) Text(
-                            "Next: ${relativeLabel(upcoming.first().nextBilling)}",
+                            "Sonraki: ${relativeLabel(upcoming.first().nextBilling)}",
                             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
@@ -83,7 +83,7 @@ fun DashboardScreen(
         }
 
         if (totals.size > 1) {
-            item { Text("By currency", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+            item { Text("Para birimine göre", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
             items(totals.entries.toList()) { (cur, amt) ->
                 Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
                     Text(cur, fontWeight = FontWeight.Medium)
@@ -92,12 +92,12 @@ fun DashboardScreen(
             }
         }
 
-        item { Text("Upcoming", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+        item { Text("Yaklaşan", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
 
         if (upcoming.isEmpty()) {
             item {
                 Text(
-                    "Nothing in the next 30 days.",
+                    "Önümüzdeki 30 gün içinde bir şey yok.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp
                 )

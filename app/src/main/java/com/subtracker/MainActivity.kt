@@ -50,13 +50,13 @@ class MainActivity : ComponentActivity() {
                                     selected = tab == 0,
                                     onClick = { tab = 0 },
                                     icon = { Icon(Icons.Default.Home, null) },
-                                    label = { Text("Dashboard") }
+                                    label = { Text("Panel") }
                                 )
                                 NavigationBarItem(
                                     selected = tab == 1,
                                     onClick = { tab = 1 },
                                     icon = { Icon(Icons.Default.List, null) },
-                                    label = { Text("Subscriptions") }
+                                    label = { Text("Abonelikler") }
                                 )
                             }
                         },

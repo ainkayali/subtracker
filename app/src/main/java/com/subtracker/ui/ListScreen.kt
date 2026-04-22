@@ -39,10 +39,10 @@ fun ListScreen(
             Arrangement.Center,
             Alignment.CenterHorizontally
         ) {
-            Text("No subscriptions yet", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("Henüz abonelik yok", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Spacer(Modifier.height(6.dp))
             Text(
-                "Tap + to add your first one.",
+                "İlk aboneliğini eklemek için + tuşuna bas.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -56,7 +56,7 @@ fun ListScreen(
     ) {
         item {
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.Bottom) {
-                Text("Subscriptions", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Text("Abonelikler", fontWeight = FontWeight.Bold, fontSize = 20.sp)
                 Text(
                     "${subscriptions.size}",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

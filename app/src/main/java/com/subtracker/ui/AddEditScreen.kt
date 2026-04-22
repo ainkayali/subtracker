@@ -74,10 +74,10 @@ fun AddEditScreen(
     val s = sub
     var name by remember { mutableStateOf(s?.name ?: "") }
     var amount by remember { mutableStateOf(s?.amount?.toString() ?: "") }
-    var currency by remember { mutableStateOf(s?.currency ?: "USD") }
+    var currency by remember { mutableStateOf(s?.currency ?: "TRY") }
     var cycle by remember { mutableStateOf(s?.cycle ?: "monthly") }
     var nextBilling by remember { mutableStateOf(s?.nextBilling ?: System.currentTimeMillis()) }
-    var category by remember { mutableStateOf(s?.category ?: "Other") }
+    var category by remember { mutableStateOf(s?.category ?: "Diğer") }
     var notes by remember { mutableStateOf(s?.notes ?: "") }
     var reminderOn by remember { mutableStateOf(s?.reminderOn ?: true) }
     var reminderDays by remember { mutableStateOf(s?.reminderDays?.toString() ?: "1") }
@@ -94,7 +94,7 @@ fun AddEditScreen(
                 }) { Text("OK") }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showDatePicker = false }) { Text("İptal") }
             }
         ) { DatePicker(datePickerState) }
     }
@@ -107,7 +107,7 @@ fun AddEditScreen(
             IconButton(onDone) { Icon(Icons.Default.ArrowBack, "Back") }
             Spacer(Modifier.width(4.dp))
             Text(
-                if (s != null) "Edit" else "Add subscription",
+                if (s != null) "Düzenle" else "Abonelik ekle",
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
                 modifier = Modifier.weight(1f)
@@ -128,7 +128,7 @@ fun AddEditScreen(
         ) {
             OutlinedTextField(
                 name, { name = it },
-                label = { Text("Name") },
+                label = { Text("Ad") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -136,14 +136,14 @@ fun AddEditScreen(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     amount, { amount = it },
-                    label = { Text("Amount") },
+                    label = { Text("Tutar") },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 OutlinedTextField(
                     currency, { currency = it.uppercase().take(3) },
-                    label = { Text("Currency") },
+                    label = { Text("Para birimi") },
                     modifier = Modifier.width(100.dp),
                     singleLine = true
                 )
@@ -151,7 +151,7 @@ fun AddEditScreen(
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Billing cycle",
+                    "Fatura döngüsü",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -161,7 +161,7 @@ fun AddEditScreen(
                         FilterChip(
                             selected = cycle == c,
                             onClick = { cycle = c },
-                            label = { Text(c.replaceFirstChar { it.uppercase() }) }
+                            label = { Text(when(c) { "weekly" -> "Haftalık"; "yearly" -> "Yıllık"; else -> "Aylık" }) }
                         )
                     }
                 }
@@ -177,7 +177,7 @@ fun AddEditScreen(
             ) {
                 Column {
                     Text(
-                        "Next billing date",
+                        "Sonraki ödeme tarihi",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -187,13 +187,13 @@ fun AddEditScreen(
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Category",
+                    "Kategori",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Streaming", "Software", "Utilities", "Gaming", "Other").forEach { cat ->
+                    listOf("Yayın", "Yazılım", "Fatura", "Oyun", "Diğer").forEach { cat ->
                         FilterChip(
                             selected = category == cat,
                             onClick = { category = cat },
@@ -205,7 +205,7 @@ fun AddEditScreen(
 
             OutlinedTextField(
                 notes, { notes = it },
-                label = { Text("Notes") },
+                label = { Text("Notlar") },
                 modifier = Modifier.fillMaxWidth().height(90.dp),
                 maxLines = 3
             )
@@ -216,9 +216,9 @@ fun AddEditScreen(
                 Alignment.CenterVertically
             ) {
                 Column {
-                    Text("Reminder", fontWeight = FontWeight.SemiBold)
+                    Text("Hatırlatıcı", fontWeight = FontWeight.SemiBold)
                     Text(
-                        "$reminderDays days before",
+                        "$reminderDays gün önce",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -230,7 +230,7 @@ fun AddEditScreen(
                 OutlinedTextField(
                     reminderDays,
                     { if (it.all { c -> c.isDigit() }) reminderDays = it },
-                    label = { Text("Days before") },
+                    label = { Text("Gün sayısı") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -241,7 +241,7 @@ fun AddEditScreen(
                 onClick = {
                     val amt = amount.toDoubleOrNull() ?: 0.0
                     if (name.isBlank() || amt <= 0 || currency.length != 3) {
-                        Toast.makeText(context, "Name, amount and currency are required", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Ad, tutar ve para birimi zorunlu", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
                     scope.launch {
@@ -262,7 +262,7 @@ fun AddEditScreen(
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(26.dp)
-            ) { Text(if (s != null) "Save changes" else "Add subscription", fontWeight = FontWeight.SemiBold) }
+            ) { Text(if (s != null) "Kaydet" else "Ekle", fontWeight = FontWeight.SemiBold) }
 
             Spacer(Modifier.height(24.dp))
         }
