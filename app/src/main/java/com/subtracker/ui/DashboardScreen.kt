@@ -7,23 +7,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.subtracker.ExchangeRates
@@ -58,6 +54,8 @@ fun DashboardScreen(
     val dateTitle = SimpleDateFormat("d MMMM yyyy", Locale("tr", "TR")).format(Date())
     val timeTitle = SimpleDateFormat("HH:mm", Locale("tr", "TR")).format(Date())
 
+    var showSettings by remember { mutableStateOf(false) }
+
     LazyColumn(
         modifier
             .fillMaxSize()
@@ -69,7 +67,7 @@ fun DashboardScreen(
     ) {
         // 1. Header (Date & Time)
         item {
-            HeaderSection(dateTitle, timeTitle, onRefreshRates)
+            HeaderSection(dateTitle, timeTitle, onSettingsClick = { showSettings = true })
         }
 
         // 2. Total Summary Card (2nd Screenshot style)
@@ -79,7 +77,7 @@ fun DashboardScreen(
 
         // 3. Budget Card (1st Screenshot style)
         item {
-            BudgetCard(totalSpent, budgetLimit, onBudgetChange)
+            BudgetCard(totalSpent, budgetLimit)
         }
 
         // 4. Subscriptions Header
@@ -114,10 +112,19 @@ fun DashboardScreen(
             item { EmptyState() }
         }
     }
+
+    if (showSettings) {
+        SettingsDialog(
+            currentLimit = budgetLimit,
+            onLimitChange = { onBudgetChange(it); showSettings = false },
+            onRefreshRates = onRefreshRates,
+            onDismiss = { showSettings = false }
+        )
+    }
 }
 
 @Composable
-private fun HeaderSection(date: String, time: String, onRefresh: () -> Unit) {
+private fun HeaderSection(date: String, time: String, onSettingsClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -129,8 +136,8 @@ private fun HeaderSection(date: String, time: String, onRefresh: () -> Unit) {
             Text(date, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF111111))
             Text(time, fontSize = 16.sp, color = Color(0xFF77736C), fontWeight = FontWeight.Medium)
         }
-        IconButton(onClick = onRefresh) {
-            Icon(Icons.Default.Info, null, tint = Color(0xFF111111), modifier = Modifier.size(28.dp))
+        IconButton(onClick = onSettingsClick) {
+            Icon(Icons.Default.Settings, contentDescription = "Ayarlar", tint = Color(0xFF111111), modifier = Modifier.size(28.dp))
         }
     }
 }
@@ -187,13 +194,14 @@ private fun TotalSummaryCard(month: String, total: Double, exchangeRates: Exchan
 }
 
 @Composable
-private fun BudgetCard(spent: Double, limit: Double, onLimitChange: (Double) -> Unit) {
-    val progress = (spent / limit).coerceIn(0.0, 1.0).toFloat()
-    val isOverBudget = spent > limit
-    val accentColor = if (isOverBudget) Color(0xFFD32F2F) else Color(0xFFE57373)
+private fun BudgetCard(spent: Double, limit: Double) {
+    val progress = if (limit > 0) (spent / limit).coerceIn(0.0, 1.0).toFloat() else 1f
     
-    var isEditing by remember { mutableStateOf(false) }
-    var editValue by remember { mutableStateOf(limit.toInt().toString()) }
+    val accentColor = when {
+        progress <= 0.7f -> Color(0xFF4CAF50) // Green
+        progress <= 0.9f -> Color(0xFFFFA000) // Orange
+        else -> Color(0xFFD32F2F) // Red
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -209,37 +217,12 @@ private fun BudgetCard(spent: Double, limit: Double, onLimitChange: (Double) -> 
             ) {
                 Text("Bu ay harcama", fontSize = 15.sp, color = Color(0xFF77736C), fontWeight = FontWeight.Medium)
                 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { isEditing = true }
-                ) {
-                    Text("₺${spent.toInt()} / ", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    if (isEditing) {
-                        BasicTextField(
-                            value = editValue,
-                            onValueChange = { editValue = it.filter { c -> c.isDigit() } },
-                            textStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, color = accentColor),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.width(IntrinsicSize.Min),
-                            singleLine = true,
-                            decorationBox = { inner ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    inner()
-                                    Text(" ₺", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = accentColor)
-                                    Text(" ✓", Modifier.clickable { onLimitChange(editValue.toDoubleOrNull() ?: limit); isEditing = false }.padding(start = 4.dp), color = Color(0xFF4CAF50), fontWeight = FontWeight.Black)
-                                }
-                            }
-                        )
-                    } else {
-                        Text(
-                            text = "₺${limit.toInt()}",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = accentColor,
-                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                        )
-                    }
-                }
+                Text(
+                    text = "₺${spent.toInt()} / ₺${limit.toInt()}",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (progress > 0.9f) Color(0xFFD32F2F) else Color.Unspecified
+                )
             }
             
             Spacer(Modifier.height(12.dp))
@@ -270,6 +253,61 @@ private fun LegendItem(label: String, color: Color) {
         Spacer(Modifier.width(6.dp))
         Text(label, fontSize = 12.sp, color = Color(0xFF9A968F), fontWeight = FontWeight.Medium)
     }
+}
+
+@Composable
+fun SettingsDialog(
+    currentLimit: Double,
+    onLimitChange: (Double) -> Unit,
+    onRefreshRates: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var editValue by remember { mutableStateOf(currentLimit.toInt().toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Ayarlar", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Aylık Bütçe Limiti (₺)", fontSize = 14.sp, color = Color(0xFF77736C))
+                OutlinedTextField(
+                    value = editValue,
+                    onValueChange = { editValue = it.filter { c -> c.isDigit() } },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                
+                Spacer(Modifier.height(8.dp))
+                
+                OutlinedButton(
+                    onClick = { 
+                        onRefreshRates()
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Döviz Kurlarını Yenile", color = Color(0xFF111111))
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onLimitChange(editValue.toDoubleOrNull() ?: currentLimit) },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF111111))
+            ) {
+                Text("Kaydet")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("İptal", color = Color(0xFF77736C))
+            }
+        },
+        containerColor = Color(0xFFF4F3EF)
+    )
 }
 
 @Composable
