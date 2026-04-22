@@ -77,7 +77,7 @@ fun DashboardScreen(
         if (todaySubs.isNotEmpty()) {
             item { SectionHeader("BUGÜN") }
             items(todaySubs) { sub ->
-                CompactSubscriptionCard(sub, "Bugün kesilecek", true) { onEdit(sub) }
+                SubscriptionCard(sub, "Bugün kesilecek", true) { onEdit(sub) }
             }
         }
 
@@ -85,7 +85,7 @@ fun DashboardScreen(
             item { SectionHeader("YAKLAŞAN") }
             items(upcomingSubs) { sub ->
                 val days = daysUntil(sub.nextBilling, now)
-                CompactSubscriptionCard(sub, "$days gün sonra", false, showProgress = true) { onEdit(sub) }
+                SubscriptionCard(sub, "$days gün sonra", false, showProgress = true) { onEdit(sub) }
             }
         }
 
@@ -93,7 +93,7 @@ fun DashboardScreen(
             item { SectionHeader("DİĞER") }
             items(otherSubs) { sub ->
                 val dateStr = formatDateMinimal(sub.nextBilling)
-                CompactSubscriptionCard(sub, dateStr, false) { onEdit(sub) }
+                SubscriptionCard(sub, dateStr, false) { onEdit(sub) }
             }
         }
         
@@ -206,7 +206,7 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun CompactSubscriptionCard(
+private fun SubscriptionCard(
     sub: Subscription, 
     status: String, 
     isAlert: Boolean, 
@@ -218,61 +218,111 @@ private fun CompactSubscriptionCard(
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BrandBadge(sub)
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
                 Text(
-                    "[ ${sub.name} ]",
-                    fontSize = 16.sp,
+                    sub.name,
+                    color = Color(0xFF161616),
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF111111)
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    formatMoney(sub.amount, sub.currency),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF111111)
-                )
-            }
-            Spacer(Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isAlert) {
-                    Text("⚠️ ", fontSize = 13.sp)
-                } else if (showProgress) {
-                    Text("⏳ ", fontSize = 13.sp)
-                } else {
-                    Text("📅 ", fontSize = 13.sp)
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isAlert) {
+                        Text("⚠️ ", fontSize = 13.sp)
+                    } else if (showProgress) {
+                        Text("⏳ ", fontSize = 13.sp)
+                    } else {
+                        Text("📅 ", fontSize = 13.sp)
+                    }
+                    Text(
+                        text = status,
+                        fontSize = 13.sp,
+                        color = statusColor
+                    )
                 }
-                Text(
-                    text = status,
-                    fontSize = 13.sp,
-                    color = statusColor
-                )
-            }
-            if (showProgress) {
-                val daysLeft = daysUntil(sub.nextBilling, LocalDate.now())
-                val cycleDays = when(sub.cycle) {
-                    "weekly" -> 7
-                    "yearly" -> 365
-                    else -> 30
+                if (showProgress) {
+                    val daysLeft = daysUntil(sub.nextBilling, LocalDate.now())
+                    val cycleDays = when(sub.cycle) {
+                        "weekly" -> 7
+                        "yearly" -> 365
+                        else -> 30
+                    }
+                    val progress = 1f - (daysLeft.toFloat() / cycleDays).coerceIn(0f, 1f)
+                    Text(
+                        text = asciiBar(progress.toDouble()),
+                        fontSize = 12.sp,
+                        color = Color(0xFFBBBBBB),
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
-                val progress = 1f - (daysLeft.toFloat() / cycleDays).coerceIn(0f, 1f)
-                Text(
-                    text = asciiBar(progress.toDouble()),
-                    fontSize = 12.sp,
-                    color = Color(0xFFBBBBBB),
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
             }
+            Spacer(Modifier.width(12.dp))
+            Text(
+                formatMoney(sub.amount, sub.currency),
+                color = Color(0xFF161616),
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
+            )
         }
+    }
+}
+
+@Composable
+private fun BrandBadge(sub: Subscription) {
+    val style = brandStyle(sub.name, sub.category)
+    Box(
+        modifier = Modifier
+            .size(54.dp)
+            .clip(if (style.round) CircleShape else RoundedCornerShape(12.dp))
+            .background(style.background),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            style.label,
+            color = style.content,
+            fontSize = style.fontSize,
+            fontWeight = FontWeight.Black
+        )
+    }
+}
+
+private data class BrandStyle(
+    val label: String,
+    val background: Color,
+    val content: Color = Color.White,
+    val round: Boolean = true,
+    val fontSize: androidx.compose.ui.unit.TextUnit = 24.sp
+)
+
+private fun brandStyle(name: String, category: String): BrandStyle {
+    val normalized = name.lowercase(Locale.US)
+    return when {
+        "netflix" in normalized -> BrandStyle("N", Color(0xFFFBF3F1), Color(0xFFE50914), false, 38.sp)
+        "spotify" in normalized -> BrandStyle("S", Color(0xFF57D861), Color.White, true, 28.sp)
+        "youtube" in normalized -> BrandStyle("▶", Color(0xFFE91E3A), Color.White, true, 24.sp)
+        "apple" in normalized -> BrandStyle("♪", Color(0xFFE94D6A), Color.White, false, 32.sp)
+        "chatgpt" in normalized || "openai" in normalized -> BrandStyle("◎", Color.White, Color.Black, true, 30.sp)
+        "claude" in normalized -> BrandStyle("✳", Color(0xFFF7EFEA), Color(0xFFC26B50), true, 32.sp)
+        category == "Oyun" -> BrandStyle("G", Color(0xFF6047D7), Color.White)
+        category == "Yazılım" -> BrandStyle("A", Color(0xFF1F2937), Color.White)
+        category == "Fatura" -> BrandStyle("₺", Color(0xFF445849), Color.White)
+        else -> BrandStyle(name.take(1).uppercase(Locale("tr", "TR")).ifBlank { "?" }, Color(0xFFECE8DF), Color(0xFF1F1F1F))
     }
 }
 
