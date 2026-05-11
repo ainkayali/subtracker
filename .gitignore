@@ -7,3 +7,4 @@
 sdk.dir=
 release.keystore
 *.keystore
+.superpowers/
