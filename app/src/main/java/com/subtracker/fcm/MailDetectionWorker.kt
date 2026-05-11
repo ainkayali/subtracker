@@ -19,10 +19,11 @@ import kotlinx.coroutines.flow.first
 class MailDetectionWorker(
     private val ctx: Context, params: WorkerParameters
 ) : CoroutineWorker(ctx, params) {
-    override suspend fun doWork(): Result =
-        try {
+    override suspend fun doWork(): Result {
+        val emailId = inputData.getString("email_id") ?: return Result.failure()
+        return try {
             val payload = DetectionPayload(
-                email_id = inputData.getString("email_id") ?: return Result.failure(),
+                email_id = emailId,
                 provider = inputData.getString("provider").orEmpty(),
                 amount = inputData.getString("amount")?.toDoubleOrNull() ?: 0.0,
                 currency = inputData.getString("currency").orEmpty(),
@@ -33,18 +34,22 @@ class MailDetectionWorker(
             )
             val app = ctx.applicationContext as App
             val pendingDao = app.db.pendingDao()
-            if (pendingDao.byEmailId(payload.email_id) != null) return Result.success()
-            val subs = app.db.dao().getAll().first()
-            val pd = DetectionReconciler.reconcile(payload, subs, System.currentTimeMillis())
-            val newId = pendingDao.insert(pd)
-            if (newId > 0) notify(payload, newId.toInt())
-            Result.success()
+            if (pendingDao.byEmailId(payload.email_id) != null) {
+                Result.success()
+            } else {
+                val subs = app.db.dao().getAll().first()
+                val pd = DetectionReconciler.reconcile(payload, subs, System.currentTimeMillis())
+                val newId = pendingDao.insert(pd)
+                if (newId > 0) notify(payload, newId.toInt())
+                Result.success()
+            }
         } catch (ce: CancellationException) {
             throw ce
         } catch (t: Throwable) {
             t.printStackTrace()
             Result.success()
         }
+    }
 
     private fun notify(payload: DetectionPayload, id: Int) {
         val intent = Intent(ctx, MainActivity::class.java).apply {
