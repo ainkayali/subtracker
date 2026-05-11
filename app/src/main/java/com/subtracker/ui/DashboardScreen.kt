@@ -93,9 +93,15 @@ fun DashboardScreen(
             )
         }
 
-        // 2. Total Summary Card (2nd Screenshot style)
+        // 2. Total Summary Card
         item {
-            TotalSummaryCard(monthName, totalSpent, exchangeRates)
+            TotalSummaryCard(
+                month = monthName,
+                total = totalSpent,
+                exchangeRates = exchangeRates,
+                subscriptions = subscriptions,
+                onRefreshRates = onRefreshRates
+            )
         }
 
         // 3. Budget Card (1st Screenshot style)
@@ -221,7 +227,13 @@ private fun HeaderSection(
 }
 
 @Composable
-private fun TotalSummaryCard(month: String, total: Double, exchangeRates: ExchangeRates) {
+private fun TotalSummaryCard(
+    month: String,
+    total: Double,
+    exchangeRates: ExchangeRates,
+    subscriptions: List<Subscription>,
+    onRefreshRates: () -> Unit
+) {
     val usdRate = exchangeRates.ratesToTry["USD"]
     val canShowUsd = usdRate != null
     var displayCurrency by remember { mutableStateOf("TRY") }
@@ -229,6 +241,14 @@ private fun TotalSummaryCard(month: String, total: Double, exchangeRates: Exchan
     LaunchedEffect(canShowUsd) {
         if (!canShowUsd) displayCurrency = "TRY"
     }
+
+    // Per-currency native sum (monthly equivalent in native currency)
+    val byCurrency = subscriptions.groupBy { it.currency.uppercase() }
+        .mapValues { (_, list) -> list.sumOf { monthlyAmount(it) } }
+        .toSortedMap()
+    val hasMultiCurrency = byCurrency.size > 1
+    val ratesMissingForUsedCurrencies = byCurrency.keys
+        .filter { it != "TRY" && exchangeRates.ratesToTry[it] == null }
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -277,10 +297,36 @@ private fun TotalSummaryCard(month: String, total: Double, exchangeRates: Exchan
             }
             if (usdRate != null) {
                 Spacer(Modifier.height(8.dp))
+                val sourceLabel = if (exchangeRates.sourceDate.isNotBlank()) " · ${exchangeRates.sourceDate}" else ""
                 Text(
-                    "1 USD = ${"%.2f".format(usdRate)} ₺",
+                    "1 USD = ${"%.2f".format(usdRate)} ₺$sourceLabel",
                     fontSize = 13.sp,
                     color = Color(0xFF77736C),
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            if (ratesMissingForUsedCurrencies.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    color = Color(0xFFFFF7E8),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { onRefreshRates() }
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(
+                            "⚠ ${ratesMissingForUsedCurrencies.joinToString(", ")} kuru yok — toplam yanlış olabilir.",
+                            fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFB36F00)
+                        )
+                        Text("Tıkla → kurları yenile", fontSize = 11.sp, color = Color(0xFF77736C))
+                    }
+                }
+            }
+            if (hasMultiCurrency) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Orijinal: " + byCurrency.entries.joinToString("  +  ") { (c, v) -> formatMoney(v, c) },
+                    fontSize = 12.sp,
+                    color = Color(0xFF9A968F),
                     fontWeight = FontWeight.Medium
                 )
             }

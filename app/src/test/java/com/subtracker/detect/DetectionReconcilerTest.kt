@@ -52,4 +52,36 @@ class DetectionReconcilerTest {
         assertEquals("amount_change", pd.kind)
         assertEquals(5L, pd.targetSubId)
     }
+
+    @Test
+    fun `normalize strips corporate suffixes`() {
+        assertEquals("dropbox", DetectionReconciler.normalize("Dropbox, Inc."))
+        assertEquals("anthropic", DetectionReconciler.normalize("Anthropic, PBC"))
+        assertEquals("reddit", DetectionReconciler.normalize("Reddit, Inc."))
+        assertEquals("tp-link", DetectionReconciler.normalize("TP-Link Systems Inc."))
+    }
+
+    @Test
+    fun `dropbox inc matches existing dropbox subscription`() {
+        val sub = Subscription(
+            id = 5, name = "Dropbox", amount = 80.99, currency = "TRY",
+            cycle = "monthly", nextBilling = 1_700_000_000_000L, category = "Yazılım"
+        )
+        val p = payload.copy(provider = "Dropbox, Inc.", amount = 80.99)
+        val pd = DetectionReconciler.reconcile(p, subscriptions = listOf(sub), now = 1_700_000_000_000L)
+        assertEquals("new_payment", pd.kind)
+        assertEquals(5L, pd.targetSubId)
+    }
+
+    @Test
+    fun `reddit and reddit inc collapse to same sub`() {
+        val sub = Subscription(
+            id = 5, name = "Reddit", amount = 6.99, currency = "USD",
+            cycle = "monthly", nextBilling = 1_700_000_000_000L, category = "Yayın"
+        )
+        val p = payload.copy(provider = "Reddit, Inc.", amount = 6.99, currency = "USD")
+        val pd = DetectionReconciler.reconcile(p, subscriptions = listOf(sub), now = 1_700_000_000_000L)
+        assertEquals("new_payment", pd.kind)
+        assertEquals(5L, pd.targetSubId)
+    }
 }
