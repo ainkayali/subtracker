@@ -32,6 +32,7 @@ class ReminderWorker(
 
 object Notifier {
     const val CHANNEL_ID = "subscription_reminders"
+    const val DETECTION_CHANNEL_ID = "subscription_detections"
     const val WORK_NAME = "reminder_check"
 
     private const val PREFS = "subscription_reminders"

@@ -7,6 +7,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Insert
 import androidx.room.Index
+import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
@@ -52,6 +53,29 @@ data class PaymentLog(
     val cycleAtPayment: String
 )
 
+@Entity(
+    indices = [
+        Index(value = ["emailId"], unique = true),
+        Index("status"),
+        Index("createdAt")
+    ]
+)
+data class PendingDetection(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val emailId: String,
+    val kind: String,
+    val targetSubId: Long?,
+    val provider: String,
+    val amount: Double,
+    val currency: String,
+    val dateIso: String,
+    val cycle: String,
+    val confidence: Double,
+    val rawSubject: String,
+    val createdAt: Long,
+    val status: String = "pending"
+)
+
 @Dao
 interface SubDao {
     @Query("SELECT * FROM Subscription ORDER BY nextBilling ASC")
@@ -88,10 +112,36 @@ interface PaymentDao {
     suspend fun insert(log: PaymentLog)
 }
 
-@Database(entities = [Subscription::class, PaymentLog::class], version = 2, exportSchema = true)
+@Dao
+interface PendingDetectionDao {
+    @Query("SELECT * FROM PendingDetection WHERE status = 'pending' ORDER BY createdAt DESC")
+    fun pending(): Flow<List<PendingDetection>>
+
+    @Query("SELECT COUNT(*) FROM PendingDetection WHERE status = 'pending'")
+    fun pendingCount(): Flow<Int>
+
+    @Query("SELECT * FROM PendingDetection WHERE emailId = :emailId LIMIT 1")
+    suspend fun byEmailId(emailId: String): PendingDetection?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(detection: PendingDetection): Long
+
+    @Query("UPDATE PendingDetection SET status = :status WHERE id = :id")
+    suspend fun setStatus(id: Long, status: String)
+
+    @Delete
+    suspend fun delete(detection: PendingDetection)
+}
+
+@Database(
+    entities = [Subscription::class, PaymentLog::class, PendingDetection::class],
+    version = 3,
+    exportSchema = true
+)
 abstract class AppDb : RoomDatabase() {
     abstract fun dao(): SubDao
     abstract fun paymentDao(): PaymentDao
+    abstract fun pendingDao(): PendingDetectionDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -111,6 +161,33 @@ abstract class AppDb : RoomDatabase() {
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_PaymentLog_subscriptionId` ON `PaymentLog` (`subscriptionId`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_PaymentLog_paidAt` ON `PaymentLog` (`paidAt`)")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `PendingDetection` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `emailId` TEXT NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        `targetSubId` INTEGER,
+                        `provider` TEXT NOT NULL,
+                        `amount` REAL NOT NULL,
+                        `currency` TEXT NOT NULL,
+                        `dateIso` TEXT NOT NULL,
+                        `cycle` TEXT NOT NULL,
+                        `confidence` REAL NOT NULL,
+                        `rawSubject` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `status` TEXT NOT NULL DEFAULT 'pending'
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_PendingDetection_emailId` ON `PendingDetection` (`emailId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_PendingDetection_status` ON `PendingDetection` (`status`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_PendingDetection_createdAt` ON `PendingDetection` (`createdAt`)")
             }
         }
     }

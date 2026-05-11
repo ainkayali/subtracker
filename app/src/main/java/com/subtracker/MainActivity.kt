@@ -25,14 +25,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.subtracker.ui.AddEditScreen
+import com.subtracker.ui.BackfillScreen
 import com.subtracker.ui.DashboardScreen
 import com.subtracker.ui.NotificationsScreen
 import com.subtracker.ui.PaymentHistoryScreen
+import com.subtracker.ui.PendingDetectionScreen
 import com.subtracker.ui.SubTrackerTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val openScreen = intent?.getStringExtra("open_screen")
         setContent {
             SubTrackerTheme {
                 val vm: SubViewModel = viewModel()
@@ -41,7 +44,14 @@ class MainActivity : ComponentActivity() {
                 val budgetLimit by vm.budgetLimit.collectAsState()
                 val recentPayments by vm.recentPayments.collectAsState(emptyList())
                 val allPayments by vm.allPayments.collectAsState(emptyList())
-                var screen by remember { mutableStateOf<Screen>(Screen.Dashboard) }
+                val pendingDetections by vm.pendingDetections.collectAsState()
+                val pendingCount by vm.pendingCount.collectAsState()
+                var screen by remember {
+                    mutableStateOf<Screen>(
+                        if (openScreen == "pending_detections") Screen.PendingDetections
+                        else Screen.Dashboard
+                    )
+                }
                 val context = LocalContext.current
                 val notificationPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
@@ -75,10 +85,13 @@ class MainActivity : ComponentActivity() {
                                 exchangeRates = exchangeRates,
                                 budgetLimit = budgetLimit,
                                 recentPayments = recentPayments,
+                                pendingCount = pendingCount,
                                 onBudgetChange = vm::setBudgetLimit,
                                 onRefreshRates = vm::refreshRates,
                                 onOpenNotifications = { screen = Screen.Notifications },
                                 onOpenHistory = { screen = Screen.PaymentHistory },
+                                onOpenPending = { screen = Screen.PendingDetections },
+                                onOpenBackfill = { screen = Screen.Backfill },
                                 onEdit = { screen = Screen.Edit(it.id) },
                                 contentPadding = pad
                             )
@@ -104,6 +117,22 @@ class MainActivity : ComponentActivity() {
                             onBack = { screen = Screen.Dashboard }
                         )
                     }
+                    Screen.PendingDetections -> {
+                        BackHandler { screen = Screen.Dashboard }
+                        PendingDetectionScreen(
+                            items = pendingDetections,
+                            onAccept = vm::acceptDetection,
+                            onReject = vm::rejectDetection,
+                            onBack = { screen = Screen.Dashboard }
+                        )
+                    }
+                    Screen.Backfill -> {
+                        BackHandler { screen = Screen.Dashboard }
+                        BackfillScreen(
+                            triggerBackfill = vm::triggerBackfill,
+                            onBack = { screen = Screen.Dashboard }
+                        )
+                    }
                 }
             }
         }
@@ -115,4 +144,6 @@ private sealed interface Screen {
     data class Edit(val id: Long) : Screen
     data object Notifications : Screen
     data object PaymentHistory : Screen
+    data object PendingDetections : Screen
+    data object Backfill : Screen
 }

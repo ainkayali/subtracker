@@ -40,10 +40,13 @@ fun DashboardScreen(
     exchangeRates: ExchangeRates,
     budgetLimit: Double,
     recentPayments: List<PaymentLog>,
+    pendingCount: Int,
     onBudgetChange: (Double) -> Unit,
     onRefreshRates: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenPending: () -> Unit,
+    onOpenBackfill: () -> Unit,
     onEdit: (Subscription) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier
@@ -53,7 +56,7 @@ fun DashboardScreen(
     val totalSpent = sorted.sumOf {
         monthlyAmount(it) * (exchangeRates.ratesToTry[it.currency.uppercase()] ?: 1.0)
     }
-    
+
     val monthName = SimpleDateFormat("MMMM", Locale("tr", "TR")).format(Date()).uppercase(Locale("tr", "TR"))
     val dateTitle = SimpleDateFormat("d MMMM yyyy", Locale("tr", "TR")).format(Date())
     val timeTitle = SimpleDateFormat("HH:mm", Locale("tr", "TR")).format(Date())
@@ -61,6 +64,7 @@ fun DashboardScreen(
     val upcomingCount = subscriptions.count { sub ->
         sub.reminderOn && (sub.nextBilling - nowMillis) in 0..(sub.reminderDays.toLong().coerceAtLeast(0L) * 86_400_000L)
     }
+    val bellBadgeCount = upcomingCount + pendingCount
 
     var showSettings by remember { mutableStateOf(false) }
 
@@ -78,8 +82,8 @@ fun DashboardScreen(
             HeaderSection(
                 dateTitle,
                 timeTitle,
-                upcomingCount = upcomingCount,
-                onBellClick = onOpenNotifications,
+                upcomingCount = bellBadgeCount,
+                onBellClick = if (pendingCount > 0) onOpenPending else onOpenNotifications,
                 onSettingsClick = { showSettings = true }
             )
         }
@@ -159,8 +163,11 @@ fun DashboardScreen(
     if (showSettings) {
         SettingsDialog(
             currentLimit = budgetLimit,
+            pendingCount = pendingCount,
             onLimitChange = { onBudgetChange(it); showSettings = false },
             onRefreshRates = onRefreshRates,
+            onOpenPending = { showSettings = false; onOpenPending() },
+            onOpenBackfill = { showSettings = false; onOpenBackfill() },
             onDismiss = { showSettings = false }
         )
     }
@@ -318,8 +325,11 @@ private fun BudgetCard(spent: Double, limit: Double) {
 @Composable
 fun SettingsDialog(
     currentLimit: Double,
+    pendingCount: Int,
     onLimitChange: (Double) -> Unit,
     onRefreshRates: () -> Unit,
+    onOpenPending: () -> Unit,
+    onOpenBackfill: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var editValue by remember { mutableStateOf(currentLimit.toInt().toString()) }
@@ -328,7 +338,7 @@ fun SettingsDialog(
         onDismissRequest = onDismiss,
         title = { Text("Ayarlar", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Aylık Bütçe Limiti (₺)", fontSize = 14.sp, color = Color(0xFF77736C))
                 OutlinedTextField(
                     value = editValue,
@@ -338,19 +348,31 @@ fun SettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
-                
-                Spacer(Modifier.height(8.dp))
-                
+
+                Spacer(Modifier.height(4.dp))
+
                 OutlinedButton(
-                    onClick = { 
-                        onRefreshRates()
-                        onDismiss()
-                    },
+                    onClick = { onRefreshRates(); onDismiss() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Döviz Kurlarını Yenile", color = Color(0xFF111111)) }
+
+                OutlinedButton(
+                    onClick = onOpenPending,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Döviz Kurlarını Yenile", color = Color(0xFF111111))
+                    Text(
+                        if (pendingCount > 0) "Mail Tespitleri ($pendingCount)" else "Mail Tespitleri",
+                        color = Color(0xFF111111)
+                    )
                 }
+
+                OutlinedButton(
+                    onClick = onOpenBackfill,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Geçmiş Mailleri Tara", color = Color(0xFF111111)) }
             }
         },
         confirmButton = {

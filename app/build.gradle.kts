@@ -2,6 +2,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+    id("com.google.gms.google-services")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
@@ -13,8 +15,12 @@ android {
         applicationId = "com.subtracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.2.0"
+        versionCode = 10
+        versionName = "1.3.0"
+
+        buildConfigField("String", "SUBHOOK_BASE_URL", "\"https://subhook.dafre.org\"")
+        buildConfigField("String", "SUBHOOK_HMAC_SECRET",
+            "\"${System.getenv("SUBHOOK_HMAC_SECRET") ?: "dev-secret-replace"}\"")
     }
 
     val ksPath = System.getenv("KEYSTORE_PATH")
@@ -60,6 +66,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
@@ -104,6 +111,10 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation(platform("com.google.firebase:firebase-bom:33.2.0"))
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     ksp("androidx.room:room-compiler:2.6.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
