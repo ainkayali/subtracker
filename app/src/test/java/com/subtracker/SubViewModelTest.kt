@@ -196,6 +196,91 @@ class SubViewModelTest {
         )
     }
 
+    @Test
+    fun `clearAllSubscriptionsInTransaction clears detection history so backfill can rebuild`() = runBlocking {
+        val subId = db.dao().insert(
+            Subscription(
+                name = "Spotify",
+                amount = 99.0,
+                currency = "TRY",
+                cycle = "monthly",
+                nextBilling = millis(LocalDate.of(2026, 6, 11)),
+                category = "Muzik"
+            )
+        )
+        db.paymentDao().insert(
+            PaymentLog(
+                subscriptionId = subId,
+                paidAt = millis(LocalDate.of(2026, 5, 11)),
+                amount = 99.0,
+                currency = "TRY",
+                cycleAtPayment = "monthly"
+            )
+        )
+        db.pendingDao().insert(
+            PendingDetection(
+                emailId = "spotify-may",
+                kind = "new_sub",
+                targetSubId = null,
+                provider = "Spotify",
+                amount = 99.0,
+                currency = "TRY",
+                dateIso = "2026-05-11",
+                cycle = "monthly",
+                confidence = 0.97,
+                rawSubject = "Spotify May receipt",
+                createdAt = millis(LocalDate.of(2026, 5, 12)),
+                status = "accepted"
+            )
+        )
+
+        clearAllSubscriptionsInTransaction(db)
+
+        assertTrue(db.dao().all().isEmpty())
+        assertTrue(db.paymentDao().recent(10).first().isEmpty())
+        assertNull(db.pendingDao().byEmailId("spotify-may"))
+    }
+
+    @Test
+    fun `backfill replays accepted detections when matching subscription was deleted`() = runBlocking {
+        db.pendingDao().insert(
+            PendingDetection(
+                emailId = "spotify-may",
+                kind = "new_sub",
+                targetSubId = null,
+                provider = "Spotify",
+                amount = 99.0,
+                currency = "TRY",
+                dateIso = "2026-05-11",
+                cycle = "monthly",
+                confidence = 0.97,
+                rawSubject = "Spotify May receipt",
+                createdAt = millis(LocalDate.of(2026, 5, 12)),
+                status = "accepted"
+            )
+        )
+
+        val result = applyBackfillDetectionsInTransaction(
+            db = db,
+            detections = listOf(
+                DetectionPayload(
+                    email_id = "spotify-may",
+                    provider = "Spotify",
+                    amount = 99.0,
+                    currency = "TRY",
+                    date_iso = "2026-05-11",
+                    cycle = "monthly",
+                    confidence = 0.97,
+                    raw_subject = "Spotify May receipt"
+                )
+            ),
+            now = millis(LocalDate.of(2026, 5, 12))
+        )
+
+        assertEquals(1, result.autoApplied)
+        assertEquals(1, db.dao().getAll().first().size)
+    }
+
     private fun millis(date: LocalDate): Long =
         date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
 

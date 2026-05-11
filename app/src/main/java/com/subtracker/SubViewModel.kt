@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Locale
 
 class SubViewModel(app: Application) : AndroidViewModel(app) {
     private val db = (app as App).db
@@ -67,9 +68,7 @@ class SubViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearAllSubscriptions() = viewModelScope.launch {
-        db.withTransaction {
-            dao.all().forEach { dao.delete(it) }
-        }
+        clearAllSubscriptionsInTransaction(db)
     }
 
     fun acceptDetection(pd: PendingDetection) = viewModelScope.launch {
@@ -136,6 +135,13 @@ internal suspend fun rollForwardPastDueSubscriptions(db: AppDb, nowMillis: Long)
     }
 }
 
+internal suspend fun clearAllSubscriptionsInTransaction(db: AppDb) {
+    db.withTransaction {
+        db.dao().all().forEach { db.dao().delete(it) }
+        db.pendingDao().clearAll()
+    }
+}
+
 internal fun parseIsoDateMillis(iso: String): Long {
     if (iso.isBlank()) return System.currentTimeMillis()
     val d = LocalDate.parse(iso)
@@ -165,8 +171,10 @@ internal suspend fun applyBackfillDetectionsInTransaction(
         val dao = db.dao()
         val pendingDao = db.pendingDao()
         for (p in detections) {
-            if (pendingDao.byEmailId(p.email_id) != null) continue
-            val pd = DetectionReconciler.reconcile(p, dao.all(), now)
+            val subscriptions = dao.all()
+            val existing = pendingDao.byEmailId(p.email_id)
+            if (shouldSkipExistingDetection(existing, p, subscriptions)) continue
+            val pd = DetectionReconciler.reconcile(p, subscriptions, now)
             if (shouldAutoApply(pd)) {
                 applyDetectionInTransaction(db, pd)
                 pendingDao.insert(pd.copy(status = "accepted"))
@@ -177,6 +185,24 @@ internal suspend fun applyBackfillDetectionsInTransaction(
         }
     }
     return BackfillResult.Done(autoApplied + pendingCount, autoApplied, pendingCount)
+}
+
+private fun shouldSkipExistingDetection(
+    existing: PendingDetection?,
+    payload: DetectionPayload,
+    subscriptions: List<Subscription>
+): Boolean {
+    if (existing == null) return false
+    if (existing.status == "accepted" && !hasProviderMatch(subscriptions, payload.provider)) return false
+    return true
+}
+
+private fun hasProviderMatch(subscriptions: List<Subscription>, provider: String): Boolean {
+    val pName = provider.lowercase(Locale.US)
+    return subscriptions.any {
+        val n = it.name.lowercase(Locale.US)
+        n.isNotBlank() && (n.contains(pName) || pName.contains(n.substringBefore(' ')))
+    }
 }
 
 internal suspend fun applyDetectionInTransaction(db: AppDb, pd: PendingDetection) {
