@@ -4,13 +4,13 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
+import com.subtracker.detect.DetectionPayload
 import com.subtracker.detect.DetectionReconciler
 import com.subtracker.detect.SubhookClient
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -72,47 +72,9 @@ class SubViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private suspend fun applyDetectionInTransaction(pd: PendingDetection) {
-        when (pd.kind) {
-            "new_sub" -> {
-                val cycle = normalizedCycleFor(pd.cycle)
-                val paidAt = parseIsoDateMillis(pd.dateIso)
-                val nextBilling = if (cycle == "one-time") paidAt else addCycle(paidAt, cycle)
-                val newId = dao.insert(Subscription(
-                    name = pd.provider, amount = pd.amount, currency = pd.currency,
-                    cycle = cycle, nextBilling = nextBilling, category = "Diğer"
-                ))
-                paymentDao.insert(PaymentLog(
-                    subscriptionId = newId, paidAt = paidAt,
-                    amount = pd.amount, currency = pd.currency, cycleAtPayment = cycle
-                ))
-            }
-            "new_payment" -> pd.targetSubId?.let { sid ->
-                paymentDao.insert(PaymentLog(
-                    subscriptionId = sid, paidAt = parseIsoDateMillis(pd.dateIso),
-                    amount = pd.amount, currency = pd.currency,
-                    cycleAtPayment = normalizedCycleFor(pd.cycle)
-                ))
-            }
-            "amount_change" -> pd.targetSubId?.let { sid ->
-                val sub = dao.byId(sid) ?: return@let
-                dao.update(sub.copy(amount = pd.amount, currency = pd.currency))
-                paymentDao.insert(PaymentLog(
-                    subscriptionId = sid, paidAt = parseIsoDateMillis(pd.dateIso),
-                    amount = pd.amount, currency = pd.currency,
-                    cycleAtPayment = normalizedCycleFor(pd.cycle)
-                ))
-            }
-            "date_correction" -> pd.targetSubId?.let { sid ->
-                val sub = dao.byId(sid) ?: return@let
-                dao.update(sub.copy(nextBilling = parseIsoDateMillis(pd.dateIso)))
-            }
-        }
-    }
-
     fun acceptDetection(pd: PendingDetection) = viewModelScope.launch {
         db.withTransaction {
-            applyDetectionInTransaction(pd)
+            applyDetectionInTransaction(db, pd)
             pendingDao.setStatus(pd.id, "accepted")
         }
     }
@@ -141,24 +103,7 @@ class SubViewModel(app: Application) : AndroidViewModel(app) {
                     return@flow
                 }
                 if (job.status == "done") {
-                    val subs = dao.getAll().first()
-                    val now = System.currentTimeMillis()
-                    var autoApplied = 0
-                    var pendingCount = 0
-                    db.withTransaction {
-                        for (p in job.detections) {
-                            if (pendingDao.byEmailId(p.email_id) != null) continue
-                            val pd = DetectionReconciler.reconcile(p, subs, now)
-                            if (shouldAutoApply(pd)) {
-                                applyDetectionInTransaction(pd)
-                                pendingDao.insert(pd.copy(status = "accepted"))
-                                autoApplied++
-                            } else {
-                                if (pendingDao.insert(pd) > 0) pendingCount++
-                            }
-                        }
-                    }
-                    emit(BackfillResult.Done(autoApplied + pendingCount, autoApplied, pendingCount))
+                    emit(applyBackfillDetectionsInTransaction(db, job.detections, System.currentTimeMillis()))
                     return@flow
                 }
             }
@@ -207,6 +152,87 @@ internal fun shouldAutoApply(pd: PendingDetection): Boolean {
     if (pd.kind != "new_sub" && pd.kind != "new_payment") return false
     val cycle = normalizedCycleFor(pd.cycle)
     return cycle == "monthly" || cycle == "weekly" || cycle == "yearly"
+}
+
+internal suspend fun applyBackfillDetectionsInTransaction(
+    db: AppDb,
+    detections: List<DetectionPayload>,
+    now: Long
+): BackfillResult.Done {
+    var autoApplied = 0
+    var pendingCount = 0
+    db.withTransaction {
+        val dao = db.dao()
+        val pendingDao = db.pendingDao()
+        for (p in detections) {
+            if (pendingDao.byEmailId(p.email_id) != null) continue
+            val pd = DetectionReconciler.reconcile(p, dao.all(), now)
+            if (shouldAutoApply(pd)) {
+                applyDetectionInTransaction(db, pd)
+                pendingDao.insert(pd.copy(status = "accepted"))
+                autoApplied++
+            } else {
+                if (pendingDao.insert(pd) > 0) pendingCount++
+            }
+        }
+    }
+    return BackfillResult.Done(autoApplied + pendingCount, autoApplied, pendingCount)
+}
+
+internal suspend fun applyDetectionInTransaction(db: AppDb, pd: PendingDetection) {
+    val dao = db.dao()
+    val paymentDao = db.paymentDao()
+    when (pd.kind) {
+        "new_sub" -> {
+            val cycle = normalizedCycleFor(pd.cycle)
+            val paidAt = parseIsoDateMillis(pd.dateIso)
+            val nextBilling = if (cycle == "one-time" || cycle == "unknown") paidAt else addCycle(paidAt, cycle)
+            val newId = dao.insert(Subscription(
+                name = pd.provider, amount = pd.amount, currency = pd.currency,
+                cycle = cycle, nextBilling = nextBilling, category = "Diğer"
+            ))
+            paymentDao.insert(PaymentLog(
+                subscriptionId = newId, paidAt = paidAt,
+                amount = pd.amount, currency = pd.currency, cycleAtPayment = cycle
+            ))
+        }
+        "new_payment" -> pd.targetSubId?.let { sid ->
+            val paidAt = parseIsoDateMillis(pd.dateIso)
+            val cycle = normalizedCycleFor(pd.cycle)
+            paymentDao.insert(PaymentLog(
+                subscriptionId = sid, paidAt = paidAt,
+                amount = pd.amount, currency = pd.currency,
+                cycleAtPayment = cycle
+            ))
+            advanceSubscriptionAfterPayment(db, sid, paidAt, cycle)
+        }
+        "amount_change" -> pd.targetSubId?.let { sid ->
+            val paidAt = parseIsoDateMillis(pd.dateIso)
+            val cycle = normalizedCycleFor(pd.cycle)
+            val sub = dao.byId(sid) ?: return@let
+            dao.update(sub.copy(amount = pd.amount, currency = pd.currency))
+            paymentDao.insert(PaymentLog(
+                subscriptionId = sid, paidAt = paidAt,
+                amount = pd.amount, currency = pd.currency,
+                cycleAtPayment = cycle
+            ))
+            advanceSubscriptionAfterPayment(db, sid, paidAt, cycle)
+        }
+        "date_correction" -> pd.targetSubId?.let { sid ->
+            val sub = dao.byId(sid) ?: return@let
+            dao.update(sub.copy(nextBilling = parseIsoDateMillis(pd.dateIso)))
+        }
+    }
+}
+
+private suspend fun advanceSubscriptionAfterPayment(db: AppDb, subId: Long, paidAt: Long, cycle: String) {
+    if (cycle == "one-time" || cycle == "unknown") return
+    val dao = db.dao()
+    val sub = dao.byId(subId) ?: return
+    val next = addCycle(paidAt, cycle)
+    if (next > sub.nextBilling) {
+        dao.update(sub.copy(nextBilling = next))
+    }
 }
 
 sealed class BackfillResult {

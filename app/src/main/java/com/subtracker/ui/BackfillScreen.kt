@@ -55,7 +55,7 @@ fun BackfillScreen(
         ) {
             Text(
                 "Fastmail INBOX'unu tarayıp eksik abonelik ve ödemeleri tespit eder. " +
-                "Her tespit Mail Tespitleri ekranında onay bekler.",
+                "Düzenli döngüler otomatik eklenir; tek seferlik veya belirsiz kayıtlar onay bekler.",
                 fontSize = 13.sp, color = Color(0xFF77736C)
             )
             OutlinedTextField(

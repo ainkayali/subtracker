@@ -2,7 +2,9 @@ package com.subtracker
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.withTransaction
 import androidx.test.core.app.ApplicationProvider
+import com.subtracker.detect.DetectionPayload
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -110,6 +112,88 @@ class SubViewModelTest {
         db.dao().delete(sub)
 
         assertTrue(db.paymentDao().forSub(subId).first().isEmpty())
+    }
+
+    @Test
+    fun `applying new payment advances next billing from paid date`() = runBlocking {
+        val subId = db.dao().insert(
+            Subscription(
+                name = "Spotify",
+                amount = 99.0,
+                currency = "TRY",
+                cycle = "monthly",
+                nextBilling = millis(LocalDate.of(2026, 5, 1)),
+                category = "Muzik"
+            )
+        )
+        val detection = PendingDetection(
+            emailId = "mail-spotify-may",
+            kind = "new_payment",
+            targetSubId = subId,
+            provider = "Spotify",
+            amount = 99.0,
+            currency = "TRY",
+            dateIso = "2026-05-11",
+            cycle = "monthly",
+            confidence = 0.96,
+            rawSubject = "Spotify receipt",
+            createdAt = millis(LocalDate.of(2026, 5, 11))
+        )
+
+        db.withTransaction {
+            applyDetectionInTransaction(db, detection)
+        }
+
+        val updated = db.dao().byId(subId)!!
+        val logs = db.paymentDao().forSub(subId).first()
+        assertEquals(LocalDate.of(2026, 6, 11), date(updated.nextBilling))
+        assertEquals(1, logs.size)
+        assertEquals(LocalDate.of(2026, 5, 11), date(logs.single().paidAt))
+    }
+
+    @Test
+    fun `backfill auto apply reuses newly created subscription for later same provider payments`() = runBlocking {
+        val detections = listOf(
+            DetectionPayload(
+                email_id = "spotify-apr",
+                provider = "Spotify",
+                amount = 99.0,
+                currency = "TRY",
+                date_iso = "2026-04-11",
+                cycle = "monthly",
+                confidence = 0.97,
+                raw_subject = "Spotify April receipt"
+            ),
+            DetectionPayload(
+                email_id = "spotify-may",
+                provider = "Spotify",
+                amount = 99.0,
+                currency = "TRY",
+                date_iso = "2026-05-11",
+                cycle = "monthly",
+                confidence = 0.97,
+                raw_subject = "Spotify May receipt"
+            )
+        )
+
+        val result = applyBackfillDetectionsInTransaction(
+            db = db,
+            detections = detections,
+            now = millis(LocalDate.of(2026, 5, 12))
+        )
+
+        val subscriptions = db.dao().getAll().first()
+        val logs = db.paymentDao().recent(10).first()
+        assertEquals(2, result.inserted)
+        assertEquals(2, result.autoApplied)
+        assertEquals(0, result.pending)
+        assertEquals(1, subscriptions.size)
+        assertEquals(LocalDate.of(2026, 6, 11), date(subscriptions.single().nextBilling))
+        assertEquals(2, logs.size)
+        assertEquals(
+            listOf(LocalDate.of(2026, 5, 11), LocalDate.of(2026, 4, 11)),
+            logs.map { date(it.paidAt) }
+        )
     }
 
     private fun millis(date: LocalDate): Long =
