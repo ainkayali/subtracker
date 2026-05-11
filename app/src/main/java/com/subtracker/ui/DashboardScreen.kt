@@ -1,5 +1,6 @@
 package com.subtracker.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -47,6 +48,7 @@ fun DashboardScreen(
     onOpenHistory: () -> Unit,
     onOpenPending: () -> Unit,
     onOpenBackfill: () -> Unit,
+    onClearAll: () -> Unit,
     onEdit: (Subscription) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier
@@ -168,6 +170,7 @@ fun DashboardScreen(
             onRefreshRates = onRefreshRates,
             onOpenPending = { showSettings = false; onOpenPending() },
             onOpenBackfill = { showSettings = false; onOpenBackfill() },
+            onClearAll = onClearAll,
             onDismiss = { showSettings = false }
         )
     }
@@ -330,8 +333,26 @@ fun SettingsDialog(
     onRefreshRates: () -> Unit,
     onOpenPending: () -> Unit,
     onOpenBackfill: () -> Unit,
+    onClearAll: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    var showClearConfirm by remember { mutableStateOf(false) }
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("Tüm abonelikleri sil?") },
+            text = { Text("Geri alınamaz. Ödeme geçmişi de cascade silinir.", fontSize = 13.sp) },
+            confirmButton = {
+                Button(
+                    onClick = { onClearAll(); showClearConfirm = false; onDismiss() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) { Text("Evet, hepsini sil") }
+            },
+            dismissButton = { TextButton(onClick = { showClearConfirm = false }) { Text("İptal") } },
+            containerColor = Color(0xFFF4F3EF)
+        )
+    }
+
     var editValue by remember { mutableStateOf(currentLimit.toInt().toString()) }
 
     AlertDialog(
@@ -373,6 +394,13 @@ fun SettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("Geçmiş Mailleri Tara", color = Color(0xFF111111)) }
+
+                OutlinedButton(
+                    onClick = { showClearConfirm = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0xFFD32F2F))
+                ) { Text("Tüm Abonelikleri Sil", color = Color(0xFFD32F2F)) }
             }
         },
         confirmButton = {
@@ -397,6 +425,7 @@ internal fun EnhancedSubscriptionCard(sub: Subscription, now: LocalDate, onClick
     val style = brandStyle(sub.name, sub.category)
     val daysUntil = daysUntil(sub.nextBilling, now)
     val statusText = when {
+        daysUntil < 0L -> "Gecikmiş (${-daysUntil}g)"
         daysUntil == 0L -> "Bugün ödeniyor"
         daysUntil == 1L -> "Yarın ödeniyor"
         daysUntil < 7 -> "$daysUntil gün sonra"

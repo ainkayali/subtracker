@@ -98,10 +98,19 @@ fun BackfillScreen(
                         )
                     }
                 }
-                is BackfillResult.Done -> Text(
-                    "${s.inserted} tespit eklendi — Mail Tespitleri ekranına bak.",
-                    color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold
-                )
+                is BackfillResult.Done -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (s.autoApplied > 0) {
+                        Text("${s.autoApplied} abonelik otomatik eklendi (monthly/yearly/weekly).",
+                            color = Color(0xFF4CAF50), fontWeight = FontWeight.SemiBold)
+                    }
+                    if (s.pending > 0) {
+                        Text("${s.pending} kayıt onay bekliyor (one-time/unknown cycle). Mail Tespitleri'ne bak.",
+                            color = Color(0xFFFFA000), fontSize = 13.sp)
+                    }
+                    if (s.autoApplied == 0 && s.pending == 0) {
+                        Text("Tespit yok.", color = Color(0xFF77736C))
+                    }
+                }
                 is BackfillResult.Error -> Text("Hata: ${s.message}", color = Color(0xFFD32F2F))
                 null -> {}
             }

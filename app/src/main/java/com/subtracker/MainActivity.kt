@@ -92,6 +92,7 @@ class MainActivity : ComponentActivity() {
                                 onOpenHistory = { screen = Screen.PaymentHistory },
                                 onOpenPending = { screen = Screen.PendingDetections },
                                 onOpenBackfill = { screen = Screen.Backfill },
+                                onClearAll = vm::clearAllSubscriptions,
                                 onEdit = { screen = Screen.Edit(it.id) },
                                 contentPadding = pad
                             )
