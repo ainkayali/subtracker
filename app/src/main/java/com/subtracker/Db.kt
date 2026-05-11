@@ -110,6 +110,9 @@ interface PaymentDao {
 
     @Insert
     suspend fun insert(log: PaymentLog)
+
+    @Delete
+    suspend fun delete(log: PaymentLog)
 }
 
 @Dao

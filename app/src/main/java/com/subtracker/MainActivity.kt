@@ -94,6 +94,8 @@ class MainActivity : ComponentActivity() {
                                 onOpenBackfill = { screen = Screen.Backfill },
                                 onClearAll = vm::clearAllSubscriptions,
                                 onEdit = { screen = Screen.Edit(it.id) },
+                                onDeleteSub = vm::remove,
+                                onDeletePayment = vm::removePayment,
                                 contentPadding = pad
                             )
                         }

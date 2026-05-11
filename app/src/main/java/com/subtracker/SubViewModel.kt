@@ -58,6 +58,8 @@ class SubViewModel(app: Application) : AndroidViewModel(app) {
 
     fun remove(sub: Subscription) = viewModelScope.launch { dao.delete(sub) }
 
+    fun removePayment(log: PaymentLog) = viewModelScope.launch { paymentDao.delete(log) }
+
     suspend fun byId(id: Long) = dao.byId(id)
 
     fun refreshRates() = viewModelScope.launch {
