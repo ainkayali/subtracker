@@ -5,23 +5,33 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import androidx.room.Room
+import androidx.work.Configuration
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
-class App : Application() {
+class App : Application(), Configuration.Provider {
     val db by lazy {
         Room.databaseBuilder(this, AppDb::class.java, "subs.db")
             .addMigrations(AppDb.MIGRATION_1_2)
             .build()
     }
 
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().build()
+
     override fun onCreate() {
         super.onCreate()
         createReminderChannel()
-        scheduleReminderWorker()
+        // Skip WorkManager scheduling under Robolectric — tests init their own.
+        if (!isRobolectric()) {
+            runCatching { scheduleReminderWorker() }
+        }
     }
+
+    private fun isRobolectric(): Boolean =
+        Build.FINGERPRINT.equals("robolectric", ignoreCase = true)
 
     private fun createReminderChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
