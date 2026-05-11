@@ -84,14 +84,18 @@ fun BackfillScreen(
                 )
             }
             when (val s = state) {
-                BackfillResult.Loading -> {
+                is BackfillResult.Loading -> {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.height(20.dp))
-                        Text("Server'da JMAP + DeepSeek çalışıyor, 30-60 sn sürebilir...",
-                            fontSize = 12.sp, color = Color(0xFF77736C))
+                        val pct = if (s.total > 0) (s.processed * 100 / s.total) else 0
+                        Text(
+                            if (s.total == 0) "Mail listesi alınıyor..."
+                            else "Taranıyor: ${s.processed}/${s.total} (%$pct)",
+                            fontSize = 12.sp, color = Color(0xFF77736C)
+                        )
                     }
                 }
                 is BackfillResult.Done -> Text(

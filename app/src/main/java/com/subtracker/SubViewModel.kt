@@ -118,24 +118,39 @@ class SubViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun triggerBackfill(months: Int): Flow<BackfillResult> = flow {
-        emit(BackfillResult.Loading)
+        emit(BackfillResult.Loading(0, 0))
         try {
             val client = SubhookClient(
                 BuildConfig.SUBHOOK_BASE_URL,
                 BuildConfig.SUBHOOK_HMAC_SECRET
             )
-            val resp = client.backfill(months)
-            val subs = dao.getAll().first()
-            val now = System.currentTimeMillis()
-            var inserted = 0
-            db.withTransaction {
-                for (p in resp.detections) {
-                    if (pendingDao.byEmailId(p.email_id) != null) continue
-                    val pd = DetectionReconciler.reconcile(p, subs, now)
-                    if (pendingDao.insert(pd) > 0) inserted++
+            val jobId = client.submitBackfill(months)
+            while (true) {
+                kotlinx.coroutines.delay(3000)
+                val job = client.backfillStatus(jobId)
+                if (job.status == "running") {
+                    emit(BackfillResult.Loading(job.processed, job.total))
+                    continue
+                }
+                if (job.status == "error") {
+                    emit(BackfillResult.Error(job.error ?: "job error"))
+                    return@flow
+                }
+                if (job.status == "done") {
+                    val subs = dao.getAll().first()
+                    val now = System.currentTimeMillis()
+                    var inserted = 0
+                    db.withTransaction {
+                        for (p in job.detections) {
+                            if (pendingDao.byEmailId(p.email_id) != null) continue
+                            val pd = DetectionReconciler.reconcile(p, subs, now)
+                            if (pendingDao.insert(pd) > 0) inserted++
+                        }
+                    }
+                    emit(BackfillResult.Done(inserted))
+                    return@flow
                 }
             }
-            emit(BackfillResult.Done(inserted))
         } catch (t: Throwable) {
             emit(BackfillResult.Error(t.message ?: "unknown"))
         }
@@ -172,7 +187,7 @@ internal fun parseIsoDateMillis(iso: String): Long {
 }
 
 sealed class BackfillResult {
-    data object Loading : BackfillResult()
+    data class Loading(val processed: Int, val total: Int) : BackfillResult()
     data class Done(val inserted: Int) : BackfillResult()
     data class Error(val message: String) : BackfillResult()
 }
