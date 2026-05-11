@@ -5,6 +5,7 @@ import android.util.Xml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -35,52 +36,21 @@ class ExchangeRateRepository(private val context: Context) {
         }
 
         connection.inputStream.use { input ->
-            val parser = Xml.newPullParser().apply {
-                setInput(input, "UTF-8")
-            }
-            val rates = mutableMapOf("TRY" to 1.0)
-            var sourceDate = ""
-            var currentCode: String? = null
-            var currentTag: String? = null
-
-            while (parser.next() != XmlPullParser.END_DOCUMENT) {
-                when (parser.eventType) {
-                    XmlPullParser.START_TAG -> {
-                        currentTag = parser.name
-                        if (parser.name == "Tarih_Date") {
-                            sourceDate = parser.getAttributeValue(null, "Tarih").orEmpty()
-                        }
-                        if (parser.name == "Currency") {
-                            currentCode = parser.getAttributeValue(null, "Kod")
-                        }
-                    }
-                    XmlPullParser.TEXT -> {
-                        if (currentTag == "ForexSelling") {
-                            val code = currentCode
-                            val value = parser.text.trim().replace(',', '.').toDoubleOrNull()
-                            if (code != null && value != null) rates[code.uppercase()] = value
-                        }
-                    }
-                    XmlPullParser.END_TAG -> {
-                        if (parser.name == "Currency") currentCode = null
-                        currentTag = null
-                    }
-                }
-            }
-
-            return ExchangeRates(ratesToTry = rates, sourceDate = sourceDate, source = "TCMB satış")
+            return parseTcmbXml(input)
         }
     }
 
-    private fun save(rates: ExchangeRates) {
+    internal fun save(rates: ExchangeRates) {
         prefs.edit()
             .putString("sourceDate", rates.sourceDate)
+            .putString("source", rates.source)
             .putString("rates", rates.ratesToTry.entries.joinToString(";") { "${it.key}:${it.value}" })
             .apply()
     }
 
-    private fun loadCached(): ExchangeRates? {
+    internal fun loadCached(): ExchangeRates? {
         val raw = prefs.getString("rates", null) ?: return null
+        if (raw.isBlank()) return null
         val rates = raw.split(';')
             .mapNotNull {
                 val parts = it.split(':')
@@ -88,14 +58,52 @@ class ExchangeRateRepository(private val context: Context) {
                 parts[0] to (parts[1].toDoubleOrNull() ?: return@mapNotNull null)
             }
             .toMap()
+        if (rates.isEmpty()) return null
         return ExchangeRates(
             ratesToTry = rates,
             sourceDate = prefs.getString("sourceDate", "").orEmpty(),
-            source = "TCMB satış"
+            source = prefs.getString("source", "TCMB satış").orEmpty()
         )
     }
 
     private companion object {
         const val TcmbTodayXml = "https://www.tcmb.gov.tr/kurlar/today.xml"
     }
+}
+
+internal fun parseTcmbXml(input: InputStream): ExchangeRates {
+    val parser = Xml.newPullParser().apply {
+        setInput(input, "UTF-8")
+    }
+    val rates = mutableMapOf("TRY" to 1.0)
+    var sourceDate = ""
+    var currentCode: String? = null
+    var currentTag: String? = null
+
+    while (parser.next() != XmlPullParser.END_DOCUMENT) {
+        when (parser.eventType) {
+            XmlPullParser.START_TAG -> {
+                currentTag = parser.name
+                if (parser.name == "Tarih_Date") {
+                    sourceDate = parser.getAttributeValue(null, "Tarih").orEmpty()
+                }
+                if (parser.name == "Currency") {
+                    currentCode = parser.getAttributeValue(null, "Kod")
+                }
+            }
+            XmlPullParser.TEXT -> {
+                if (currentTag == "ForexSelling") {
+                    val code = currentCode
+                    val value = parser.text.trim().replace(',', '.').toDoubleOrNull()
+                    if (code != null && value != null) rates[code.uppercase()] = value
+                }
+            }
+            XmlPullParser.END_TAG -> {
+                if (parser.name == "Currency") currentCode = null
+                currentTag = null
+            }
+        }
+    }
+
+    return ExchangeRates(ratesToTry = rates, sourceDate = sourceDate, source = "TCMB satış")
 }

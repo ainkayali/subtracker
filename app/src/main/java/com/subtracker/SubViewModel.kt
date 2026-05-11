@@ -3,6 +3,7 @@ package com.subtracker
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -10,7 +11,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class SubViewModel(app: Application) : AndroidViewModel(app) {
-    private val dao = (app as App).db.dao()
+    private val db = (app as App).db
+    private val dao = db.dao()
+    private val paymentDao = db.paymentDao()
     private val rateRepository = ExchangeRateRepository(app)
     private val settingsRepository = SettingsRepository(app)
 
@@ -20,15 +23,14 @@ class SubViewModel(app: Application) : AndroidViewModel(app) {
     val exchangeRates: StateFlow<ExchangeRates> = _exchangeRates
     
     val budgetLimit = settingsRepository.budgetLimit
+    val recentPayments = paymentDao.recent(5)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val allPayments = paymentDao.recent(500)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            dao.all().filter { it.nextBilling <= now }.forEach { sub ->
-                var next = sub.nextBilling
-                while (next <= now) next = addCycle(next, sub.cycle)
-                dao.update(sub.copy(nextBilling = next))
-            }
+            rollForwardPastDueSubscriptions(db, System.currentTimeMillis())
         }
         refreshRates()
     }
@@ -47,5 +49,28 @@ class SubViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshRates() = viewModelScope.launch {
         _exchangeRates.value = rateRepository.load()
+    }
+}
+
+internal suspend fun rollForwardPastDueSubscriptions(db: AppDb, nowMillis: Long) {
+    db.withTransaction {
+        val dao = db.dao()
+        val paymentDao = db.paymentDao()
+        dao.all().filter { it.nextBilling <= nowMillis }.forEach { sub ->
+            var next = sub.nextBilling
+            while (next <= nowMillis) {
+                paymentDao.insert(
+                    PaymentLog(
+                        subscriptionId = sub.id,
+                        paidAt = next,
+                        amount = sub.amount,
+                        currency = sub.currency,
+                        cycleAtPayment = sub.cycle
+                    )
+                )
+                next = addCycle(next, sub.cycle)
+            }
+            dao.update(sub.copy(nextBilling = next))
+        }
     }
 }

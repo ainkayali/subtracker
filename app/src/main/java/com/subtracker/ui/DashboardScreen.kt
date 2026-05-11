@@ -9,7 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.subtracker.ExchangeRates
+import com.subtracker.PaymentLog
 import com.subtracker.Subscription
 import com.subtracker.formatMoney
 import com.subtracker.monthlyAmount
@@ -38,8 +39,11 @@ fun DashboardScreen(
     subscriptions: List<Subscription>,
     exchangeRates: ExchangeRates,
     budgetLimit: Double,
+    recentPayments: List<PaymentLog>,
     onBudgetChange: (Double) -> Unit,
     onRefreshRates: () -> Unit,
+    onOpenNotifications: () -> Unit,
+    onOpenHistory: () -> Unit,
     onEdit: (Subscription) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier
@@ -53,6 +57,10 @@ fun DashboardScreen(
     val monthName = SimpleDateFormat("MMMM", Locale("tr", "TR")).format(Date()).uppercase(Locale("tr", "TR"))
     val dateTitle = SimpleDateFormat("d MMMM yyyy", Locale("tr", "TR")).format(Date())
     val timeTitle = SimpleDateFormat("HH:mm", Locale("tr", "TR")).format(Date())
+    val nowMillis = System.currentTimeMillis()
+    val upcomingCount = subscriptions.count { sub ->
+        sub.reminderOn && (sub.nextBilling - nowMillis) in 0..(sub.reminderDays.toLong().coerceAtLeast(0L) * 86_400_000L)
+    }
 
     var showSettings by remember { mutableStateOf(false) }
 
@@ -67,7 +75,13 @@ fun DashboardScreen(
     ) {
         // 1. Header (Date & Time)
         item {
-            HeaderSection(dateTitle, timeTitle, onSettingsClick = { showSettings = true })
+            HeaderSection(
+                dateTitle,
+                timeTitle,
+                upcomingCount = upcomingCount,
+                onBellClick = onOpenNotifications,
+                onSettingsClick = { showSettings = true }
+            )
         }
 
         // 2. Total Summary Card (2nd Screenshot style)
@@ -95,7 +109,7 @@ fun DashboardScreen(
                     letterSpacing = 2.sp
                 )
                 Text(
-                    "${subscriptions.size} / ${subscriptions.size}",
+                    "${subscriptions.size}",
                     color = Color(0xFF9A968F),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
@@ -106,6 +120,35 @@ fun DashboardScreen(
         // 5. Subscription Cards (1st Screenshot style)
         items(sorted) { sub ->
             EnhancedSubscriptionCard(sub, now) { onEdit(sub) }
+        }
+
+        if (recentPayments.isNotEmpty()) {
+            item {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "SON ÖDEMELER",
+                        color = Color(0xFF9A968F),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp
+                    )
+                    Text(
+                        "Tümü →",
+                        color = Color(0xFF9A968F),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { onOpenHistory() }
+                    )
+                }
+            }
+            items(recentPayments.take(3)) { log ->
+                val sub = subscriptions.find { it.id == log.subscriptionId }
+                PaymentLogRow(log, sub)
+            }
         }
         
         if (subscriptions.isEmpty()) {
@@ -124,17 +167,35 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun HeaderSection(date: String, time: String, onSettingsClick: () -> Unit) {
+private fun HeaderSection(
+    date: String,
+    time: String,
+    upcomingCount: Int,
+    onBellClick: () -> Unit,
+    onSettingsClick: () -> Unit
+) {
     Row(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth().padding(start = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = {}) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color(0xFF111111), modifier = Modifier.size(28.dp))
-        }
         Column(Modifier.weight(1f)) {
             Text(date, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF111111))
             Text(time, fontSize = 16.sp, color = Color(0xFF77736C), fontWeight = FontWeight.Medium)
+        }
+        Box {
+            IconButton(onClick = onBellClick) {
+                Icon(Icons.Default.Notifications, contentDescription = "Bildirimler", tint = Color(0xFF111111), modifier = Modifier.size(28.dp))
+            }
+            if (upcomingCount > 0) {
+                Box(
+                    Modifier
+                        .size(10.dp)
+                        .align(Alignment.TopEnd)
+                        .offset(x = (-8).dp, y = 8.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFD32F2F))
+                )
+            }
         }
         IconButton(onClick = onSettingsClick) {
             Icon(Icons.Default.Settings, contentDescription = "Ayarlar", tint = Color(0xFF111111), modifier = Modifier.size(28.dp))
@@ -144,9 +205,13 @@ private fun HeaderSection(date: String, time: String, onSettingsClick: () -> Uni
 
 @Composable
 private fun TotalSummaryCard(month: String, total: Double, exchangeRates: ExchangeRates) {
-    val usdRate = exchangeRates.ratesToTry["USD"] ?: 44.88 // Default from screenshot if not loaded
+    val usdRate = exchangeRates.ratesToTry["USD"]
+    val canShowUsd = usdRate != null
     var displayCurrency by remember { mutableStateOf("TRY") }
-    val displayTotal = if (displayCurrency == "USD") total / usdRate else total
+    val displayTotal = if (displayCurrency == "USD" && usdRate != null) total / usdRate else total
+    LaunchedEffect(canShowUsd) {
+        if (!canShowUsd) displayCurrency = "TRY"
+    }
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -174,26 +239,34 @@ private fun TotalSummaryCard(month: String, total: Double, exchangeRates: Exchan
                 Surface(
                     color = Color(0xFFF0EFEB),
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.clickable {
-                        displayCurrency = if (displayCurrency == "TRY") "USD" else "TRY"
-                    }
+                    modifier = Modifier.then(
+                        if (canShowUsd) {
+                            Modifier.clickable {
+                                displayCurrency = if (displayCurrency == "TRY") "USD" else "TRY"
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
                 ) {
                     Text(
-                        "$displayCurrency  ↔",
+                        if (canShowUsd) "$displayCurrency  ↔" else "TRY",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        color = Color(0xFF77736C)
+                        color = if (canShowUsd) Color(0xFF77736C) else Color(0xFFBDBDBD)
                     )
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "1 USD = ${"%.2f".format(usdRate)} ₺",
-                fontSize = 13.sp,
-                color = Color(0xFF77736C),
-                fontWeight = FontWeight.Medium
-            )
+            if (usdRate != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "1 USD = ${"%.2f".format(usdRate)} ₺",
+                    fontSize = 13.sp,
+                    color = Color(0xFF77736C),
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
@@ -238,25 +311,7 @@ private fun BudgetCard(spent: Double, limit: Double) {
             ) {
                 Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(accentColor))
             }
-            
-            Spacer(Modifier.height(16.dp))
-            
-            // Legend
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                LegendItem("Yayın", Color(0xFFE57373))
-                LegendItem("Yazılım", Color(0xFF4CAF50))
-                LegendItem("Diğer", Color(0xFFBDBDBD))
-            }
         }
-    }
-}
-
-@Composable
-private fun LegendItem(label: String, color: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(color))
-        Spacer(Modifier.width(6.dp))
-        Text(label, fontSize = 12.sp, color = Color(0xFF9A968F), fontWeight = FontWeight.Medium)
     }
 }
 
@@ -316,7 +371,7 @@ fun SettingsDialog(
 }
 
 @Composable
-private fun EnhancedSubscriptionCard(sub: Subscription, now: LocalDate, onClick: () -> Unit) {
+internal fun EnhancedSubscriptionCard(sub: Subscription, now: LocalDate, onClick: () -> Unit) {
     val style = brandStyle(sub.name, sub.category)
     val daysUntil = daysUntil(sub.nextBilling, now)
     val statusText = when {
@@ -371,6 +426,48 @@ private fun EnhancedSubscriptionCard(sub: Subscription, now: LocalDate, onClick:
 }
 
 @Composable
+internal fun PaymentLogRow(log: PaymentLog, sub: Subscription?) {
+    val style = sub?.let { brandStyle(it.name, it.category) }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(style?.background ?: Color(0xFFECE8DF)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    style?.label ?: "?",
+                    color = style?.content ?: Color(0xFF111111),
+                    fontWeight = FontWeight.Black,
+                    fontSize = 16.sp
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(sub?.name ?: "Abonelik", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF111111))
+                Text("${formatDateMinimal(log.paidAt)} · ${daysAgoLabel(log.paidAt)}", fontSize = 12.sp, color = Color(0xFF9A968F))
+            }
+            Text(
+                "+${formatMoney(log.amount, log.currency)}",
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = Color(0xFF4CAF50)
+            )
+        }
+    }
+}
+
+@Composable
 private fun EmptyState() {
     Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("--- BOŞ ---", color = Color(0xFFCCCCCC))
@@ -406,4 +503,14 @@ private fun formatDateMinimal(millis: Long): String {
     val date = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
     val monthNames = listOf("Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara")
     return "${date.dayOfMonth} ${monthNames[date.monthValue - 1]} ${date.year}"
+}
+
+private fun daysAgoLabel(millis: Long): String {
+    val date = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
+    val days = ChronoUnit.DAYS.between(date, LocalDate.now())
+    return when {
+        days <= 0L -> "Bugün"
+        days == 1L -> "Dün"
+        else -> "$days gün önce"
+    }
 }
