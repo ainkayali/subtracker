@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -51,8 +50,6 @@ fun DashboardScreen(
     onOpenBackfill: () -> Unit,
     onClearAll: () -> Unit,
     onEdit: (Subscription) -> Unit,
-    onDeleteSub: (Subscription) -> Unit,
-    onDeletePayment: (PaymentLog) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier
 ) {
@@ -132,11 +129,9 @@ fun DashboardScreen(
             }
         }
 
-        // 5. Subscription Cards (swipe to delete)
+        // 5. Subscription Cards
         items(sorted, key = { it.id }) { sub ->
-            SwipeToDelete(onDelete = { onDeleteSub(sub) }) {
-                EnhancedSubscriptionCard(sub, now) { onEdit(sub) }
-            }
+            EnhancedSubscriptionCard(sub, now) { onEdit(sub) }
         }
 
         if (recentPayments.isNotEmpty()) {
@@ -164,9 +159,7 @@ fun DashboardScreen(
             }
             items(recentPayments.take(3), key = { it.id }) { log ->
                 val sub = subscriptions.find { it.id == log.subscriptionId }
-                SwipeToDelete(onDelete = { onDeletePayment(log) }) {
-                    PaymentLogRow(log, sub)
-                }
+                PaymentLogRow(log, sub)
             }
         }
         
@@ -569,39 +562,6 @@ internal fun PaymentLogRow(log: PaymentLog, sub: Subscription?) {
             )
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SwipeToDelete(
-    onDelete: () -> Unit,
-    content: @Composable () -> Unit
-) {
-    val state = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
-                onDelete()
-                true
-            } else false
-        }
-    )
-    SwipeToDismissBox(
-        state = state,
-        backgroundContent = {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color(0xFFD32F2F))
-                    .padding(horizontal = 24.dp),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Icon(Icons.Default.Delete, "Sil", tint = Color.White)
-            }
-        },
-        enableDismissFromStartToEnd = false,
-        content = { content() }
-    )
 }
 
 @Composable
