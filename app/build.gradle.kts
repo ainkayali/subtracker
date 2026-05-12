@@ -15,8 +15,8 @@ android {
         applicationId = "com.subtracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 16
-        versionName = "1.3.6"
+        versionCode = 17
+        versionName = "1.3.7"
 
         buildConfigField("String", "SUBHOOK_BASE_URL", "\"https://subhook.dafre.org\"")
         buildConfigField("String", "SUBHOOK_HMAC_SECRET",
@@ -99,7 +99,7 @@ ksp {
 }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2024.02.00"))
+    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.ui:ui")
