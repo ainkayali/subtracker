@@ -15,8 +15,8 @@ android {
         applicationId = "com.subtracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.3.7"
+        versionCode = 18
+        versionName = "1.3.8"
 
         buildConfigField("String", "SUBHOOK_BASE_URL", "\"https://subhook.dafre.org\"")
         buildConfigField("String", "SUBHOOK_HMAC_SECRET",

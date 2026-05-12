@@ -23,10 +23,27 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        installCrashHandler()
         createNotificationChannels()
         if (!isRobolectric()) {
             runCatching { scheduleReminderWorker() }
             runCatching { registerFcmTokenOnStart() }
+        }
+    }
+
+    private fun installCrashHandler() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            runCatching {
+                val sw = java.io.StringWriter()
+                throwable.printStackTrace(java.io.PrintWriter(sw))
+                val ts = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+                    .format(java.util.Date())
+                java.io.File(filesDir, "last_crash.txt").writeText(
+                    "$ts thread=${thread.name}\n${sw}"
+                )
+            }
+            previous?.uncaughtException(thread, throwable)
         }
     }
 
