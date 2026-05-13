@@ -110,9 +110,6 @@ interface PaymentDao {
 
     @Insert
     suspend fun insert(log: PaymentLog)
-
-    @Delete
-    suspend fun delete(log: PaymentLog)
 }
 
 @Dao
@@ -131,9 +128,6 @@ interface PendingDetectionDao {
 
     @Query("UPDATE PendingDetection SET status = :status WHERE id = :id")
     suspend fun setStatus(id: Long, status: String)
-
-    @Query("DELETE FROM PendingDetection")
-    suspend fun clearAll()
 
     @Delete
     suspend fun delete(detection: PendingDetection)

@@ -9,19 +9,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,30 +36,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val openScreen = intent?.getStringExtra("open_screen")
-        val crashFile = java.io.File(filesDir, "last_crash.txt")
-        val crashText = if (crashFile.exists()) crashFile.readText().also { crashFile.delete() } else null
         setContent {
             SubTrackerTheme {
-                if (crashText != null) {
-                    var dismissed by remember { mutableStateOf(false) }
-                    if (!dismissed) {
-                        AlertDialog(
-                            onDismissRequest = { dismissed = true },
-                            title = { Text("Önceki çöküş") },
-                            text = {
-                                Text(
-                                    crashText,
-                                    modifier = Modifier
-                                        .height(400.dp)
-                                        .verticalScroll(rememberScrollState())
-                                )
-                            },
-                            confirmButton = {
-                                Button(onClick = { dismissed = true }) { Text("Tamam") }
-                            }
-                        )
-                    }
-                }
                 val vm: SubViewModel = viewModel()
                 val subs by vm.subscriptions.collectAsState(emptyList())
                 val exchangeRates by vm.exchangeRates.collectAsState()
